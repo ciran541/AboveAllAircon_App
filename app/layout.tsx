@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'AirCon Pro — Service Management',
-  description: 'Internal job management system for aircon service operations in Singapore.',
+  title: 'Above All Aircon — Operations',
+  description: 'Internal Management System',
 }
 
 export default function RootLayout({

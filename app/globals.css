@@ -90,34 +90,21 @@ body {
 .auth-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
   margin-bottom: 32px;
 }
 
-.auth-logo-icon {
-  width: 42px;
-  height: 42px;
-  background: linear-gradient(135deg, var(--accent) 0%, #7c3aed 100%);
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+.auth-logo img {
+  max-width: 220px;
+  height: auto;
 }
-
-.auth-logo-text {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: -0.4px;
-}
-
 .auth-logo-sub {
   font-size: 11px;
   color: var(--text-muted);
   font-weight: 400;
   letter-spacing: 0.5px;
   text-transform: uppercase;
+  text-align: center;
 }
 
 .auth-title {
@@ -403,45 +390,25 @@ textarea.form-input { resize: vertical; min-height: 80px; }
 }
 
 .sidebar-header {
-  padding: 18px 16px 14px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: center;
 }
 
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.sidebar-logo-icon {
-  width: 36px;
-  height: 36px;
-  background: linear-gradient(135deg, var(--accent) 0%, #7c3aed 100%);
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
 }
 
-.sidebar-logo-info { display: flex; flex-direction: column; }
-
-.sidebar-logo-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: -0.3px;
-  line-height: 1.2;
+.sidebar-logo img {
+  max-width: 140px;
+  height: auto;
+  object-fit: contain;
 }
 
-.sidebar-logo-tagline {
-  font-size: 10.5px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.7px;
-  margin-top: 1px;
-}
+.sidebar-logo-info { display: none; }
 
 .sidebar-nav {
   flex: 1;

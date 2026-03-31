@@ -98,11 +98,7 @@ export default function LoginPage() {
       <div className="auth-card">
         {/* Logo */}
         <div className="auth-logo">
-          <div className="auth-logo-icon">❄️</div>
-          <div>
-            <div className="auth-logo-text">AirCon Pro</div>
-            <div className="auth-logo-sub">Service Management</div>
-          </div>
+          <img src="https://theloanconnection.com.sg/wp-content/uploads/2025/09/Above_all_aircon_logo-e1758263757872.png" alt="Above All Aircon" />
         </div>
 
         {/* Tabs */}

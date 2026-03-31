@@ -133,13 +133,7 @@ export default function Sidebar({ email, role, fullName = '' }: SidebarProps) {
       {/* Logo */}
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">
-            <IconSnowflake />
-          </div>
-          <div className="sidebar-logo-info">
-            <span className="sidebar-logo-name">Above All Aircon</span>
-            <span className="sidebar-logo-tagline">Operations</span>
-          </div>
+          <img src="https://theloanconnection.com.sg/wp-content/uploads/2025/09/Above_all_aircon_logo-e1758263757872.png" alt="Above All Aircon" />
         </div>
       </div>
 
