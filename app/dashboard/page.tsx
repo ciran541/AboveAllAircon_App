@@ -1,0 +1,534 @@
+import { createClient } from '@/lib/supabase/server'
+import Link from 'next/link'
+
+// --- SVGs ---
+function IconBriefcase() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+      <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+    </svg>
+  )
+}
+function IconLoader() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="2" x2="12" y2="6" />
+      <line x1="12" y1="18" x2="12" y2="22" />
+      <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+      <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+      <line x1="2" y1="12" x2="6" y2="12" />
+      <line x1="18" y1="12" x2="22" y2="12" />
+    </svg>
+  )
+}
+function IconCheck() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
+  )
+}
+function IconCalendar() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  )
+}
+function IconInventory() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+      <line x1="12" y1="22.08" x2="12" y2="12"></line>
+    </svg>
+  )
+}
+function IconTeam() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  )
+}
+function IconBox() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+    </svg>
+  )
+}
+function IconWarning() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+      <line x1="12" y1="9" x2="12" y2="13"></line>
+      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+    </svg>
+  )
+}
+function IconCross() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="15" y1="9" x2="9" y2="15"></line>
+      <line x1="9" y1="9" x2="15" y2="15"></line>
+    </svg>
+  )
+}
+
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' }).format(amount)
+}
+
+export const dynamic = 'force-dynamic'
+
+export default async function DashboardPage({ searchParams }: { searchParams: { filter?: string, tab?: string } }) {
+  const supabase = await createClient()
+
+  // Get user role
+  const { data: authData } = await supabase.auth.getUser()
+  const userId = authData?.user?.id
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single()
+  const role = profile?.role || 'staff'
+
+  // URL Params
+  const params = await searchParams;
+  const filter = params.filter || 'last7days';
+  const tab = params.tab || (role === 'admin' ? 'financial' : 'overview');
+
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  
+  let startDate = new Date();
+  if (filter === 'today') {
+    startDate.setHours(0,0,0,0);
+  } else if (filter === 'yesterday') {
+    startDate.setDate(today.getDate() - 1);
+    startDate.setHours(0,0,0,0);
+    // Note: To be precise for "Only Yesterday", we'd need an endDate too. 
+    // But for "From Yesterday onwards", this works.
+  } else if (filter === 'last7days') {
+    startDate.setDate(today.getDate() - 7);
+  } else if (filter === 'last30days') {
+    startDate.setDate(today.getDate() - 30);
+  } else if (filter === 'custom') {
+    startDate.setDate(today.getDate() - 30);
+  }
+  const startDateStr = startDate.toISOString();
+
+  // -------------------------
+  // STAFF VIEW LOGIC
+  // -------------------------
+  if (role === 'staff') {
+    const { data: myJobs } = await supabase
+      .from('jobs')
+      .select('*, customers(name, address)')
+      .eq('assigned_to', userId)
+      .order('job_date', { ascending: true })
+
+    const safeMyJobs = myJobs || []
+    
+    // Calculate staff stats (period based)
+    const jobsScheduledToday = safeMyJobs.filter(j => j.job_date === todayStr).length;
+    const pendingVisits = safeMyJobs.filter(j => j.stage === 'Site Visit Scheduled').length;
+    const completedCount = safeMyJobs.filter(j => j.stage === 'Completed' && j.created_at >= startDateStr).length;
+
+    // Upcoming jobs (all future)
+    const upcomingJobs = safeMyJobs.filter(j => (j.job_date || '') >= todayStr && j.stage !== 'Completed');
+
+    return (
+      <div style={{ background: '#f8fafc', minHeight: '100vh', padding: '40px' }}>
+        <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px', marginBottom: '8px' }}>
+          My Dashboard
+        </h1>
+        <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '32px' }}>
+          Overview of your assigned workload — {filter.toUpperCase()}
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ width: '40px', height: '40px', background: '#eff6ff', color: '#2563eb', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconCalendar /></div>
+            </div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '4px' }}>Jobs Today</div>
+            <div style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', letterSpacing: '-1px' }}>{jobsScheduledToday}</div>
+            <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>Assigned for today</div>
+          </div>
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ width: '40px', height: '40px', background: '#fffbeb', color: '#d97706', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconBriefcase /></div>
+            </div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '4px' }}>Pending Visits</div>
+            <div style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', letterSpacing: '-1px' }}>{pendingVisits}</div>
+            <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>Requires inspection</div>
+          </div>
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ width: '40px', height: '40px', background: '#ecfdf5', color: '#059669', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconCheck /></div>
+            </div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '4px' }}>Completed</div>
+            <div style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', letterSpacing: '-1px' }}>{completedCount}</div>
+            <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>In selected period</div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: '40px' }}>
+           <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', marginBottom: '16px' }}>Upcoming Scheduled Jobs</h2>
+           <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden' }}>
+             {upcomingJobs.length === 0 ? (
+               <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8' }}>No upcoming jobs scheduled.</div>
+             ) : (
+               upcomingJobs.map((job, idx) => (
+                 <div key={job.id} style={{ padding: '16px 24px', borderBottom: idx < upcomingJobs.length - 1 ? '1px solid #f1f5f9' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                   <div>
+                     <div style={{ fontWeight: 700, color: '#1e293b' }}>{(job.customers as any)?.name}</div>
+                     <div style={{ fontSize: '12px', color: '#64748b' }}>{job.service_type} • {job.job_date || 'TBD'}</div>
+                   </div>
+                   <div style={{ fontSize: '12px', fontWeight: 700, padding: '4px 10px', borderRadius: '6px', background: '#f1f5f9', color: '#475569' }}>{job.stage}</div>
+                 </div>
+               ))
+             )}
+           </div>
+           <div style={{ marginTop: '24px' }}>
+             <Link href="/dashboard/jobs" style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', padding: '9px 18px', background: '#2563eb', color: '#fff', borderRadius: '8px', textDecoration: 'none', fontSize: '13.5px', fontWeight: 600 }}>
+                View Full Pipeline
+             </Link>
+           </div>
+        </div>
+      </div>
+    )
+  }
+
+  // -------------------------
+  // ADMIN VIEW LOGIC
+  // -------------------------
+  // We fetch anything updated in the period to catch jobs created earlier but COMPLETED now.
+  const { data: jobs } = await supabase
+    .from('jobs')
+    .select('*, customers(name, address)')
+    .gte('updated_at', startDateStr)
+    .order('updated_at', { ascending: false });
+
+  const { count: jobsTodayCount } = await supabase
+    .from('jobs')
+    .select('*', { count: 'exact', head: true })
+    .eq('job_date', todayStr);
+
+  const safeJobs = jobs || [];
+
+  let revenueCollected = 0;
+  let pendingReceivables = 0;
+  let pipelineValue = 0;
+  let pendingEnquiries = 0;
+  let completedCount = 0;
+  const serviceMix = { Servicing: 0, Repair: 0, Installation: 0 };
+  
+  // For Performance Tab
+  const staffPerformance: Record<string, { count: number, revenue: number, name: string }> = {};
+  const { data: profiles } = await supabase.from('profiles').select('id, email, full_name');
+  if (profiles) {
+    profiles.forEach(p => {
+       staffPerformance[p.id] = { count: 0, revenue: 0, name: p.full_name || p.email }
+    })
+  }
+
+  safeJobs.forEach(job => {
+    const amount = Number(job.quoted_amount) || 0;
+    
+    if (job.stage === 'Completed' && job.payment_status === 'Paid') revenueCollected += amount;
+    if (job.stage === 'Completed' && job.payment_status === 'Pending') pendingReceivables += amount;
+    if (job.stage === 'Quotation Sent') pipelineValue += amount;
+    if (job.stage === 'New Enquiry') pendingEnquiries++;
+    
+    // Performance aggregation: Use updated_at to ensure it belongs in this period
+    if (job.stage === 'Completed' && job.updated_at >= startDateStr) {
+      completedCount++;
+      if (job.assigned_to) {
+        if (!staffPerformance[job.assigned_to]) {
+           // Fallback for missing profile
+           staffPerformance[job.assigned_to] = { count: 0, revenue: 0, name: 'Staff #' + job.assigned_to.substring(0,4) };
+        }
+        staffPerformance[job.assigned_to].count++;
+        staffPerformance[job.assigned_to].revenue += amount;
+      }
+    }
+
+    if (job.service_type === 'Servicing') serviceMix.Servicing++;
+    else if (job.service_type === 'Repair') serviceMix.Repair++;
+    else if (job.service_type === 'Installation') serviceMix.Installation++;
+  })
+
+  const leaderboard = Object.values(staffPerformance).filter(s => s.count > 0).sort((a,b) => b.count - a.count);
+
+  const totalPeriodJobs = safeJobs.length;
+  const completionRate = totalPeriodJobs > 0 ? Math.round((completedCount / totalPeriodJobs) * 100) : 0;
+  
+  // For Inventory Tab
+  const { data: inventoryItems } = await supabase.from('inventory_items').select('*');
+  const safeItems = inventoryItems || [];
+  
+  let healthyStock = 0;
+  let lowStock = 0;
+  let outOfStock = 0;
+  
+  safeItems.forEach(item => {
+    if (item.stock_quantity === 0) outOfStock++;
+    else if (item.stock_quantity <= 5) lowStock++;
+    else healthyStock++;
+  });
+
+
+  // --- Styles ---
+  const filterBadgeStyle = (currentFilter: string) => ({
+    padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700,
+    cursor: 'pointer', color: filter === currentFilter ? '#fff' : '#64748b',
+    background: filter === currentFilter ? '#2563eb' : '#f1f5f9',
+    textDecoration: 'none', transition: 'all 0.15s ease'
+  })
+
+  const tabStyle = (currentTab: string) => ({
+    display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 0 10px',
+    borderBottom: tab === currentTab ? '2px solid #1e293b' : '2px solid transparent',
+    color: tab === currentTab ? '#1e293b' : '#64748b',
+    fontSize: '13px', fontWeight: 700, textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px', cursor: 'pointer', textDecoration: 'none', transition: 'all 0.2s',
+  })
+
+  const MetricCard = ({ title, amount, subtitle, icon, valueComponent, customColor }: any) => (
+    <div style={{
+      background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px',
+      display: 'flex', flexDirection: 'column', gap: '16px',
+      boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.02)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ width: '40px', height: '40px', background: customColor?.bg || '#f8fafc', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: customColor?.icon || '#475569' }}>
+          {icon}
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '8px' }}>
+          {title}
+        </div>
+        {valueComponent ? valueComponent : (
+          <div style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', letterSpacing: '-1px' }}>
+            {amount}
+          </div>
+        )}
+        <div style={{ fontSize: '13px', color: '#64748b', marginTop: '6px' }}>
+          {subtitle}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ background: '#f8fafc', minHeight: '100vh' }}>
+      <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '32px 40px 0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+          <div>
+            <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              Service Hub <span style={{ color: '#cbd5e1' }}>—</span> Reports
+            </h1>
+            <p style={{ fontSize: '14px', color: '#64748b', marginTop: '4px' }}>
+              Real-time analytics for your aircon business
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <div style={{ padding: '6px 14px', background: '#f1f5f9', borderRadius: '20px', fontSize: '12px', fontWeight: 700, color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
+              LIVE
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', paddingRight: '8px' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+          </div>
+          <Link href={`?filter=today&tab=${tab}`} style={filterBadgeStyle('today')}>TODAY</Link>
+          <Link href={`?filter=yesterday&tab=${tab}`} style={filterBadgeStyle('yesterday')}>YESTERDAY</Link>
+          <Link href={`?filter=last7days&tab=${tab}`} style={filterBadgeStyle('last7days')}>LAST 7 DAYS</Link>
+          <Link href={`?filter=last30days&tab=${tab}`} style={filterBadgeStyle('last30days')}>LAST 30 DAYS</Link>
+          <Link href={`?filter=custom&tab=${tab}`} style={filterBadgeStyle('custom')}>CUSTOM</Link>
+        </div>
+
+        <div style={{ display: 'flex', gap: '32px' }}>
+          <Link href={`?filter=${filter}&tab=financial`} style={tabStyle('financial')}>
+            <IconBriefcase /> Financial
+          </Link>
+          <Link href={`?filter=${filter}&tab=operations`} style={tabStyle('operations')}>
+            <IconCalendar /> Operations
+          </Link>
+          <Link href={`?filter=${filter}&tab=service`} style={tabStyle('service')}>
+            <IconLoader /> Service Mix
+          </Link>
+          <Link href={`?filter=${filter}&tab=inventory`} style={tabStyle('inventory')}>
+            <IconInventory /> Inventory
+          </Link>
+          <Link href={`?filter=${filter}&tab=performance`} style={tabStyle('performance')}>
+            <IconTeam /> Performance
+          </Link>
+        </div>
+      </div>
+
+      <div style={{ padding: '40px' }}>
+        
+        {tab === 'financial' && (
+          <div>
+             <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>Financial Summary</h2>
+             <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px' }}>Revenue, Quotes, and Cash Flow — {filter.toUpperCase()}</p>
+             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+               <MetricCard title="Revenue Collected" amount={formatCurrency(revenueCollected)} subtitle="Completed & Paid Jobs"
+                 icon={<svg width="20" height="20" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>} />
+               <MetricCard title="Pending Receivables" amount={formatCurrency(pendingReceivables)} subtitle="Completed jobs awaiting payment"
+                 icon={<svg width="20" height="20" fill="none" stroke="#eab308" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>} />
+               <MetricCard title="Pipeline Value" amount={formatCurrency(pipelineValue)} subtitle="Total value of Sent Quotations"
+                 icon={<svg width="20" height="20" fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>} />
+             </div>
+          </div>
+        )}
+
+        {tab === 'operations' && (
+          <div>
+            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>Operations & Workload</h2>
+             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px', marginTop: '24px' }}>
+               <MetricCard title="Jobs Scheduled Today" amount={jobsTodayCount ?? 0} subtitle="Appointments for today" icon={<IconCalendar />} />
+               <MetricCard title="Pending Enquiries" amount={pendingEnquiries} subtitle="Leads requiring followup action"
+                 icon={<svg width="20" height="20" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>} />
+               <MetricCard title="Completion Rate" 
+                 valueComponent={
+                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                     <div style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', letterSpacing: '-1px' }}>{completionRate}%</div>
+                     <div style={{ fontSize: '14px', fontWeight: 600, color: '#22c55e' }}>{completedCount} / {totalPeriodJobs}</div>
+                   </div>
+                 }
+                 subtitle="Jobs completed vs total scheduled" icon={<IconCheck />} />
+             </div>
+          </div>
+        )}
+
+        {tab === 'service' && (
+          <div>
+            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginBottom: '24px' }}>Service Mix Breakdown</h2>
+             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '32px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
+               <div style={{ width: '100%', height: '24px', borderRadius: '12px', display: 'flex', overflow: 'hidden', marginBottom: '32px' }}>
+                 {(totalPeriodJobs > 0) ? (
+                   <>
+                     <div style={{ width: `${(serviceMix.Servicing / totalPeriodJobs) * 100}%`, background: '#3b82f6' }}></div>
+                     <div style={{ width: `${(serviceMix.Installation / totalPeriodJobs) * 100}%`, background: '#8b5cf6' }}></div>
+                     <div style={{ width: `${(serviceMix.Repair / totalPeriodJobs) * 100}%`, background: '#10b981' }}></div>
+                   </>
+                 ) : (
+                   <div style={{ width: '100%', background: '#f1f5f9' }}></div>
+                 )}
+               </div>
+               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+                 {[
+                   { label: 'Servicing', count: serviceMix.Servicing, color: '#3b82f6', bg: '#eff6ff' },
+                   { label: 'Installation', count: serviceMix.Installation, color: '#8b5cf6', bg: '#f5f3ff' },
+                   { label: 'Repair', count: serviceMix.Repair, color: '#10b981', bg: '#ecfdf5' },
+                 ].map(mix => (
+                   <div key={mix.label} style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                     <div>
+                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
+                         <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: mix.color }}></div>
+                         {mix.label}
+                       </div>
+                       <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{mix.count}</div>
+                     </div>
+                     <div style={{ fontSize: '14px', fontWeight: 600, color: mix.color, background: mix.bg, padding: '4px 10px', borderRadius: '8px' }}>
+                       {totalPeriodJobs > 0 ? Math.round((mix.count / totalPeriodJobs) * 100) : 0}%
+                     </div>
+                   </div>
+                 ))}
+               </div>
+             </div>
+          </div>
+        )}
+
+        {tab === 'inventory' && (
+          <div>
+             <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>Inventory Status</h2>
+             <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px' }}>Current stock levels across all products (live)</p>
+             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '32px' }}>
+               <MetricCard title="Total Products" amount={safeItems.length} customColor={{bg: '#eff6ff', icon: '#2563eb'}} icon={<IconBox />} subtitle="Registered items" />
+               <MetricCard title="Healthy Stock" amount={healthyStock} customColor={{bg: '#ecfdf5', icon: '#059669'}} icon={<IconCheck />} subtitle="Items with > 5 stock" />
+               <MetricCard title="Low Stock" amount={lowStock} customColor={{bg: '#fffbeb', icon: '#d97706'}} icon={<IconWarning />} subtitle="Items with 1-5 stock" />
+               <MetricCard title="Out of Stock" amount={outOfStock} customColor={{bg: '#fef2f2', icon: '#dc2626'}} icon={<IconCross />} subtitle="Depleted items" />
+             </div>
+
+             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 700, color: '#111827', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                   NEEDS ATTENTION ({lowStock + outOfStock})
+                </h3>
+                {(lowStock + outOfStock === 0) ? (
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#10b981', fontSize: '14px', fontWeight: 600 }}>
+                      <IconCheck /> All products are well-stocked!
+                   </div>
+                ) : (
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {safeItems.filter(i => i.stock_quantity <= 5).map(item => (
+                         <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: '#f8fafc', borderRadius: '10px' }}>
+                            <div style={{ fontWeight: 600, color: '#1e293b' }}>{item.name}</div>
+                            <div style={{ fontSize: '12px', fontWeight: 700, color: item.stock_quantity === 0 ? '#dc2626' : '#d97706' }}>
+                               {item.stock_quantity} {item.unit} remaining
+                            </div>
+                         </div>
+                      ))}
+                   </div>
+                )}
+             </div>
+          </div>
+        )}
+
+        {tab === 'performance' && (
+          <div>
+            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>Staff Performance</h2>
+            <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px' }}>Completed jobs & revenue contribution — {filter.toUpperCase()}</p>
+            
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
+              {leaderboard.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>No completed jobs recorded for this period.</div>
+              ) : (
+                leaderboard.map((staff, idx) => (
+                  <div key={idx} style={{ 
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                    padding: '20px 24px', borderBottom: idx < leaderboard.length - 1 ? '1px solid #f1f5f9' : 'none' 
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div style={{ 
+                        width: '40px', height: '40px', borderRadius: '12px', background: '#f1f5f9', 
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#475569', fontSize: '14px' 
+                      }}>
+                        {staff.name.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '15px' }}>{staff.name}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>{staff.count} jobs completed</div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 800, fontSize: '18px', color: '#10b981' }}>{formatCurrency(staff.revenue)}</div>
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Revenue Contribution</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+
+      </div>
+    </div>
+  )
+}
