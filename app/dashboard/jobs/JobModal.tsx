@@ -41,6 +41,8 @@ export default function JobModal({
       quoted_amount: 0,
       priority: "Medium",
       source: "Other",
+      status: "open",
+      loss_reason: "",
     },
   );
 
@@ -420,12 +422,33 @@ export default function JobModal({
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Pipeline Stage</label>
-                <select className="form-input" value={formData.stage || "New Enquiry"} onChange={(e) => setFormData({ ...formData, stage: e.target.value })}>
-                  {STAGES.map((s) => ( <option key={s} value={s}>{s}</option> ))}
+                <label className="form-label">Lead Status Outcome</label>
+                <select className="form-input" value={formData.status || "open"} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
+                  <option value="open">Active / Open</option>
+                  <option value="won">Won (Completed)</option>
+                  <option value="lost">Lost (Analysis)</option>
                 </select>
               </div>
             </div>
+
+            <div className="form-group">
+              <label className="form-label">Pipeline Stage</label>
+              <select className="form-input" value={formData.stage || "New Enquiry"} onChange={(e) => setFormData({ ...formData, stage: e.target.value })}>
+                {STAGES.map((s) => ( <option key={s} value={s}>{s}</option> ))}
+              </select>
+            </div>
+
+            {formData.status === 'lost' && (
+              <div className="form-group" style={{ padding: '16px', background: '#fef2f2', borderRadius: '12px', border: '1px solid #fee2e2' }}>
+                <label className="form-label" style={{ color: '#dc2626' }}>Reason for Loss</label>
+                <input 
+                  className="form-input" 
+                  placeholder="Why was this lead lost?" 
+                  value={formData.loss_reason || ""} 
+                  onChange={(e) => setFormData({ ...formData, loss_reason: e.target.value })} 
+                />
+              </div>
+            )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               <div className="form-group">

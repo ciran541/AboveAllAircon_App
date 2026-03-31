@@ -99,11 +99,69 @@ export default function JobDetailClient({
     setLoading(false);
   };
 
+  const handleUpdateStatus = async (newStatus: string, reason?: string) => {
+    setLoading(true);
+    const updates: any = { 
+       status: newStatus,
+       closed_at: newStatus === 'open' ? null : new Date().toISOString()
+    };
+    if (reason) updates.loss_reason = reason;
+    if (newStatus === 'won') updates.stage = 'Completed';
+
+    const { data, error } = await supabase
+      .from('jobs')
+      .update(updates)
+      .eq('id', job.id)
+      .select()
+      .single();
+    
+    if (!error && data) {
+      setJob({ ...job, ...data });
+    } else if (error) {
+       console.error("Failed to update job status:", error.message);
+       alert("Error: " + error.message + "\n\nNote: You might need to add the 'status' column to the database via SQL first.");
+    }
+    setLoading(false);
+  };
+
   const stageIndex = STAGES.indexOf(job.stage);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
       
+      {/* --- STATUS BANNERS --- */}
+      {job.status === 'won' && (
+        <div style={{ 
+          background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '12px 24px', borderRadius: '12px',
+          display: 'flex', alignItems: 'center', gap: '12px', color: '#16a34a', fontWeight: 700 
+        }}>
+          <span style={{ fontSize: '20px' }}>🏆</span>
+          <div>
+            <div style={{ fontSize: '15px' }}>Job Won & Closed</div>
+            <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: 500 }}>Successfully completed on {new Date(job.closed_at).toLocaleDateString()}</div>
+          </div>
+        </div>
+      )}
+
+      {job.status === 'lost' && (
+        <div style={{ 
+          background: '#fef2f2', border: '1px solid #fecaca', padding: '12px 24px', borderRadius: '12px',
+          display: 'flex', alignItems: 'center', gap: '12px', color: '#dc2626', fontWeight: 700 
+        }}>
+          <span style={{ fontSize: '20px' }}>⛔</span>
+          <div>
+            <div style={{ fontSize: '15px' }}>Lead Lost</div>
+            <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: 500 }}>Reason: {job.loss_reason || 'N/A'} • {new Date(job.closed_at).toLocaleDateString()}</div>
+          </div>
+          <button 
+            onClick={() => handleUpdateStatus('open')}
+            style={{ marginLeft: 'auto', background: '#fff', border: '1px solid #fecaca', color: '#dc2626', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
+          >
+            Reopen Lead
+          </button>
+        </div>
+      )}
+
       {/* --- HEADER SECTION --- */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div>
@@ -111,6 +169,9 @@ export default function JobDetailClient({
              <span style={{ fontSize: '12px', fontWeight: 700, color: '#3b82f6', background: '#eff6ff', padding: '4px 10px', borderRadius: '6px', textTransform: 'uppercase' }}>
                Job #{job.id.substring(0, 8)}
              </span>
+             {(!job.status || job.status === 'open') && (
+               <span style={{ fontSize: '10px', fontWeight: 800, color: '#f59e0b', border: '1.5px solid #f59e0b', padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Active Lead</span>
+             )}
              <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>•</span>
              <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Created {new Date(job.created_at).toLocaleDateString()}</span>
           </div>
@@ -119,6 +180,31 @@ export default function JobDetailClient({
           </h1>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
+          {(!job.status || job.status === 'open') && (
+            <>
+              <button 
+                onClick={() => handleUpdateStatus('won')}
+                style={{ 
+                  padding: '10px 20px', borderRadius: '8px', border: 'none', background: '#10b981', 
+                  fontSize: '14px', fontWeight: 600, color: '#fff', cursor: 'pointer' 
+                }}
+              >
+                Mark as Won
+              </button>
+              <button 
+                onClick={() => {
+                  const reason = prompt("Why was this lead lost? (e.g. Price too high, Competitor, No Response)");
+                  if (reason !== null) handleUpdateStatus('lost', reason);
+                }}
+                style={{ 
+                  padding: '10px 20px', borderRadius: '8px', border: '1px solid #fecaca', background: '#fef2f2', 
+                  fontSize: '14px', fontWeight: 600, color: '#dc2626', cursor: 'pointer' 
+                }}
+              >
+                Mark as Lost
+              </button>
+            </>
+          )}
           <button 
             onClick={() => setIsEditing(!isEditing)}
             style={{ 
