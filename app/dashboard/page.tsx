@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import StaffDashboardClient from './StaffDashboardClient';
 
 // --- SVGs ---
 function IconBriefcase() {
@@ -145,77 +146,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     // Upcoming jobs (all future)
     const upcomingJobs = safeMyJobs.filter(j => (j.job_date || '') >= todayStr && j.stage !== 'Completed');
 
-    return (
-      <div style={{ background: '#f8fafc', minHeight: '100vh', padding: '40px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px', marginBottom: '8px' }}>
-          My Dashboard
-        </h1>
-        <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '32px' }}>
-          Overview of your assigned workload — {filter.toUpperCase()}
-        </p>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-              <div style={{ width: '40px', height: '40px', background: '#eff6ff', color: '#2563eb', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconCalendar /></div>
-            </div>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '4px' }}>Jobs Today</div>
-            <div style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', letterSpacing: '-1px' }}>{jobsScheduledToday}</div>
-            <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>Assigned for today</div>
-          </div>
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-              <div style={{ width: '40px', height: '40px', background: '#fffbeb', color: '#d97706', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconBriefcase /></div>
-            </div>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '4px' }}>Pending Visits</div>
-            <div style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', letterSpacing: '-1px' }}>{pendingVisits}</div>
-            <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>Requires inspection</div>
-          </div>
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-              <div style={{ width: '40px', height: '40px', background: '#ecfdf5', color: '#059669', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><IconCheck /></div>
-            </div>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: '4px' }}>Completed</div>
-            <div style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', letterSpacing: '-1px' }}>{completedCount}</div>
-            <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>In selected period</div>
-          </div>
-        </div>
-
-        <div style={{ marginTop: '40px' }}>
-           <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', marginBottom: '16px' }}>Upcoming Scheduled Jobs</h2>
-           <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden' }}>
-             {upcomingJobs.length === 0 ? (
-               <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8' }}>No upcoming jobs scheduled.</div>
-             ) : (
-               upcomingJobs.map((job, idx) => (
-                 <div key={job.id} style={{ padding: '16px 24px', borderBottom: idx < upcomingJobs.length - 1 ? '1px solid #f1f5f9' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                   <div>
-                     <div style={{ fontWeight: 700, color: '#1e293b' }}>{(job.customers as any)?.name}</div>
-                     <div style={{ fontSize: '12px', color: '#64748b' }}>{job.service_type} • {job.job_date || 'TBD'}</div>
-                   </div>
-                   <div style={{ fontSize: '12px', fontWeight: 700, padding: '4px 10px', borderRadius: '6px', background: '#f1f5f9', color: '#475569' }}>{job.stage}</div>
-                 </div>
-               ))
-             )}
-           </div>
-           <div style={{ marginTop: '24px' }}>
-             <Link href="/dashboard/jobs" style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', padding: '9px 18px', background: '#2563eb', color: '#fff', borderRadius: '8px', textDecoration: 'none', fontSize: '13.5px', fontWeight: 600 }}>
-                View Full Pipeline
-             </Link>
-           </div>
-        </div>
-      </div>
-    )
+    return <StaffDashboardClient initialJobs={safeMyJobs} todayStr={todayStr} />
   }
 
   // -------------------------
   // ADMIN VIEW LOGIC
   // -------------------------
-  // We fetch anything updated in the period to catch jobs created earlier but COMPLETED now.
-  const { data: jobs } = await supabase
+  // Fetch ALL jobs — we split calculations in JS rather than relying on a
+  // date-filtered query which causes wrong bucket attribution.
+  // Pipeline metrics (pipelineValue, pendingEnquiries) = all active jobs, no date filter.
+  // Financial/performance metrics = only jobs whose job_date falls in the selected period.
+  const { data: allJobsData } = await supabase
     .from('jobs')
     .select('*, customers(name, address)')
-    .gte('updated_at', startDateStr)
     .order('updated_at', { ascending: false });
 
   const { count: jobsTodayCount } = await supabase
@@ -223,14 +166,22 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     .select('*', { count: 'exact', head: true })
     .eq('job_date', todayStr);
 
-  const safeJobs = jobs || [];
+  const todaysAdminJobs = allJobsData?.filter(j => j.job_date === todayStr && j.stage !== 'Completed' && j.stage !== 'Loss (Analysis)' && j.status !== 'won' && j.status !== 'lost') || [];
+
+  const safeJobs = allJobsData || [];
+  // Date-only string for job_date comparison (jobs table stores date, not timestamp)
+  const startDateOnly = startDateStr.split('T')[0];
 
   let revenueCollected = 0;
   let pendingReceivables = 0;
   let pipelineValue = 0;
   let pendingEnquiries = 0;
   let completedCount = 0;
-  const serviceMix = { Servicing: 0, Repair: 0, Installation: 0 };
+  let totalPeriodJobs = 0;
+  const serviceMix: Record<string, number> = {
+    Servicing: 0, Repair: 0, Installation: 0,
+    'Chemical Wash': 0, 'Chemical Overhaul': 0, 'Gas Top-Up': 0, Dismantling: 0
+  };
   
   // For Performance Tab
   const staffPerformance: Record<string, { count: number, revenue: number, name: string }> = {};
@@ -243,33 +194,47 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
   safeJobs.forEach(job => {
     const amount = Number(job.quoted_amount) || 0;
-    
-    if (job.stage === 'Completed' && job.payment_status === 'Paid') revenueCollected += amount;
-    if (job.stage === 'Completed' && job.payment_status === 'Pending') pendingReceivables += amount;
-    if (job.stage === 'Quotation Sent') pipelineValue += amount;
-    if (job.stage === 'New Enquiry') pendingEnquiries++;
-    
-    // Performance aggregation: Use updated_at to ensure it belongs in this period
-    if (job.stage === 'Completed' && job.updated_at >= startDateStr) {
-      completedCount++;
-      if (job.assigned_to) {
-        if (!staffPerformance[job.assigned_to]) {
-           // Fallback for missing profile
-           staffPerformance[job.assigned_to] = { count: 0, revenue: 0, name: 'Staff #' + job.assigned_to.substring(0,4) };
-        }
-        staffPerformance[job.assigned_to].count++;
-        staffPerformance[job.assigned_to].revenue += amount;
-      }
+    const jobDate = job.job_date || '';
+    // inPeriod: is this job's actual work date within the selected filter range?
+    const inPeriod = jobDate >= startDateOnly;
+
+    // ─── PIPELINE SNAPSHOT (no date filter) ───
+    // Shows current real-time state of the pipeline regardless of period
+    if (job.stage === 'Quotation Sent' && (!job.status || job.status === 'open')) {
+      pipelineValue += amount;
+    }
+    if (job.stage === 'New Enquiry' && (!job.status || job.status === 'open')) {
+      pendingEnquiries++;
     }
 
-    if (job.service_type === 'Servicing') serviceMix.Servicing++;
-    else if (job.service_type === 'Repair') serviceMix.Repair++;
-    else if (job.service_type === 'Installation') serviceMix.Installation++;
-  })
+    // ─── PERIOD METRICS (filtered by job_date) ───
+    // Only count jobs that were actually scheduled/worked in the selected period
+    if (inPeriod) {
+      totalPeriodJobs++;
+
+      if (job.stage === 'Completed' && job.payment_status === 'Paid') revenueCollected += amount;
+      if (job.stage === 'Completed' && job.payment_status === 'Pending') pendingReceivables += amount;
+
+      if (job.stage === 'Completed') {
+        completedCount++;
+        if (job.assigned_to) {
+          if (!staffPerformance[job.assigned_to]) {
+            staffPerformance[job.assigned_to] = { count: 0, revenue: 0, name: 'Staff #' + job.assigned_to.substring(0,4) };
+          }
+          staffPerformance[job.assigned_to].count++;
+          staffPerformance[job.assigned_to].revenue += amount;
+        }
+      }
+
+      // Service mix within the period
+      const svcKey = job.service_type as string;
+      if (svcKey && svcKey in serviceMix) {
+        serviceMix[svcKey]++;
+      }
+    }
+  });
 
   const leaderboard = Object.values(staffPerformance).filter(s => s.count > 0).sort((a,b) => b.count - a.count);
-
-  const totalPeriodJobs = safeJobs.length;
   const completionRate = totalPeriodJobs > 0 ? Math.round((completedCount / totalPeriodJobs) * 100) : 0;
   
   // For Inventory Tab
@@ -413,43 +378,93 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
                  }
                  subtitle="Jobs completed vs total scheduled" icon={<IconCheck />} />
              </div>
+
+             <div style={{ marginTop: '40px' }}>
+               <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', marginBottom: '16px' }}>Today's Active Dispatches</h3>
+               {todaysAdminJobs.length === 0 ? (
+                 <div style={{ padding: '32px', textAlign: 'center', background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0', color: '#64748b' }}>
+                   No active jobs scheduled for today across all staff.
+                 </div>
+               ) : (
+                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '20px' }}>
+                   {todaysAdminJobs.map((job) => (
+                     <div key={job.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', boxShadow: '0 2px 4px -1px rgba(0,0,0,0.02)' }}>
+                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                         <div>
+                           <div style={{ fontSize: '16px', fontWeight: 700, color: '#1e293b' }}>{(job.customers as any)?.name || 'Unknown'}</div>
+                           <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{(job.customers as any)?.address || 'No Address'}</div>
+                         </div>
+                         <div style={{ fontSize: '11px', fontWeight: 700, background: '#f1f5f9', color: '#475569', padding: '4px 8px', borderRadius: '6px' }}>
+                           {job.stage}
+                         </div>
+                       </div>
+                       
+                       <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', fontSize: '12px', color: '#334155' }}>
+                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                           <span style={{ fontWeight: 600, color: '#64748b' }}>Tech:</span>
+                           <span style={{ fontWeight: 700, color: '#0f172a' }}>{job.assigned_to ? (staffPerformance[job.assigned_to]?.name || 'Unknown') : 'Unassigned'}</span>
+                         </div>
+                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                           <span style={{ fontWeight: 600, color: '#64748b' }}>Service:</span>
+                           <span style={{ fontWeight: 700, color: '#2563eb' }}>{job.service_type}</span>
+                         </div>
+                       </div>
+                       
+                       <Link href={`/dashboard/jobs/${job.id}`} style={{ 
+                         marginTop: 'auto', display: 'block', textAlign: 'center', background: '#eff6ff', color: '#2563eb', padding: '10px', borderRadius: '8px', fontSize: '13px', fontWeight: 700, textDecoration: 'none'
+                       }}>
+                         View Details
+                       </Link>
+                     </div>
+                   ))}
+                 </div>
+               )}
+             </div>
           </div>
         )}
 
         {tab === 'service' && (
           <div>
             <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginBottom: '24px' }}>Service Mix Breakdown</h2>
-             <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '32px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '32px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)' }}>
                <div style={{ width: '100%', height: '24px', borderRadius: '12px', display: 'flex', overflow: 'hidden', marginBottom: '32px' }}>
                  {(totalPeriodJobs > 0) ? (
                    <>
-                     <div style={{ width: `${(serviceMix.Servicing / totalPeriodJobs) * 100}%`, background: '#3b82f6' }}></div>
-                     <div style={{ width: `${(serviceMix.Installation / totalPeriodJobs) * 100}%`, background: '#8b5cf6' }}></div>
-                     <div style={{ width: `${(serviceMix.Repair / totalPeriodJobs) * 100}%`, background: '#10b981' }}></div>
+                     {Object.entries(serviceMix)
+                       .filter(([, count]) => count > 0)
+                       .map(([label, count], i) => {
+                         const colors = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#64748b'];
+                         return (
+                           <div key={label} style={{ width: `${(count / totalPeriodJobs) * 100}%`, background: colors[i % colors.length] }}></div>
+                         );
+                       })}
                    </>
                  ) : (
                    <div style={{ width: '100%', background: '#f1f5f9' }}></div>
                  )}
                </div>
-               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
-                 {[
-                   { label: 'Servicing', count: serviceMix.Servicing, color: '#3b82f6', bg: '#eff6ff' },
-                   { label: 'Installation', count: serviceMix.Installation, color: '#8b5cf6', bg: '#f5f3ff' },
-                   { label: 'Repair', count: serviceMix.Repair, color: '#10b981', bg: '#ecfdf5' },
-                 ].map(mix => (
-                   <div key={mix.label} style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                     <div>
-                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
-                         <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: mix.color }}></div>
-                         {mix.label}
+               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                 {Object.entries(serviceMix)
+                   .filter(([, count]) => count > 0 || totalPeriodJobs === 0)
+                   .slice(0, 6)
+                   .map(([label, count], i) => {
+                     const colors = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#06b6d4','#64748b'];
+                     const bgs = ['#eff6ff','#f5f3ff','#ecfdf5','#fffbeb','#fef2f2','#ecfeff','#f8fafc'];
+                     return (
+                       <div key={label} style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                         <div>
+                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
+                             <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: colors[i % colors.length] }}></div>
+                             {label}
+                           </div>
+                           <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{count}</div>
+                         </div>
+                         <div style={{ fontSize: '14px', fontWeight: 600, color: colors[i % colors.length], background: bgs[i % bgs.length], padding: '4px 10px', borderRadius: '8px' }}>
+                           {totalPeriodJobs > 0 ? Math.round((count / totalPeriodJobs) * 100) : 0}%
+                         </div>
                        </div>
-                       <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{mix.count}</div>
-                     </div>
-                     <div style={{ fontSize: '14px', fontWeight: 600, color: mix.color, background: mix.bg, padding: '4px 10px', borderRadius: '8px' }}>
-                       {totalPeriodJobs > 0 ? Math.round((mix.count / totalPeriodJobs) * 100) : 0}%
-                     </div>
-                   </div>
-                 ))}
+                     );
+                   })}
                </div>
              </div>
           </div>

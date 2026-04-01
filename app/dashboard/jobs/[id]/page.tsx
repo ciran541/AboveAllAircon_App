@@ -6,6 +6,12 @@ import Link from 'next/link'
 export default async function JobDetailPage({ params }: { params: { id: string } }) {
   const supabase = await createClient()
   const { id } = await params
+  
+  // Get active user role
+  const { data: authData } = await supabase.auth.getUser()
+  const currentUserId = authData?.user?.id
+  const { data: currentUserProfile } = await supabase.from('profiles').select('role').eq('id', currentUserId).single()
+  const userRole = currentUserProfile?.role || 'staff'
 
   // Fetch base job with customer
   const { data: job, error } = await supabase
@@ -101,6 +107,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         initialJob={enrichedJob} 
         initialMaterials={materials || []} 
         staffProfiles={staffProfiles || []}
+        userRole={userRole}
       />
     </div>
   )

@@ -49,6 +49,20 @@ export default function JobModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Loss reason modal state
+  const [showLossModal, setShowLossModal] = useState(false);
+  const [lossReasonPreset, setLossReasonPreset] = useState('');
+  const [lossReasonCustom, setLossReasonCustom] = useState('');
+
+  const LOSS_REASONS = [
+    'Price too high',
+    'No response from customer',
+    'Customer went with competitor',
+    'Job cancelled by customer',
+    'Out of service area',
+    'Other',
+  ];
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isNewCustomer, setIsNewCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", address: "" });
@@ -148,6 +162,15 @@ export default function JobModal({
     }
   };
 
+  const handleConfirmLost = async () => {
+    const finalReason = lossReasonCustom.trim() || lossReasonPreset;
+    if (!finalReason) return;
+    setFormData(prev => ({ ...prev, status: 'lost', loss_reason: finalReason }));
+    setShowLossModal(false);
+    setLossReasonPreset('');
+    setLossReasonCustom('');
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -156,6 +179,18 @@ export default function JobModal({
     // Validate customer
     if (!isNewCustomer && !formData.customer_id) {
       setError("Please select a customer or create a new one.");
+      setLoading(false);
+      return;
+    }
+
+    // Validate: dates required based on stage
+    if (formData.stage === 'Site Visit Scheduled' && !formData.visit_date) {
+      setError("A Visit Date is required before scheduling a site visit.");
+      setLoading(false);
+      return;
+    }
+    if ((formData.stage === 'Job Scheduled' || formData.stage === 'In Progress') && !formData.job_date) {
+      setError("A Job Date is required when scheduling or starting a job.");
       setLoading(false);
       return;
     }
@@ -384,6 +419,10 @@ export default function JobModal({
                     <option value="Servicing">Servicing</option>
                     <option value="Repair">Repair</option>
                     <option value="Installation">Installation</option>
+                    <option value="Chemical Wash">Chemical Wash</option>
+                    <option value="Chemical Overhaul">Chemical Overhaul</option>
+                    <option value="Gas Top-Up">Gas Top-Up</option>
+                    <option value="Dismantling">Dismantling</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -423,7 +462,12 @@ export default function JobModal({
               </div>
               <div className="form-group">
                 <label className="form-label">Lead Status Outcome</label>
-                <select className="form-input" value={formData.status || "open"} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
+                <select className="form-input" value={formData.status || "open"} onChange={(e) => {
+                    const newStatus = e.target.value;
+                    const updates: Partial<typeof formData> = { ...formData, status: newStatus };
+                    if (newStatus === 'won') updates.stage = 'Completed';
+                    setFormData(updates);
+                  }}>
                   <option value="open">Active / Open</option>
                   <option value="won">Won (Completed)</option>
                   <option value="lost">Lost (Analysis)</option>
@@ -433,33 +477,81 @@ export default function JobModal({
 
             <div className="form-group">
               <label className="form-label">Pipeline Stage</label>
-              <select className="form-input" value={formData.stage || "New Enquiry"} onChange={(e) => setFormData({ ...formData, stage: e.target.value })}>
-                {STAGES.map((s) => ( <option key={s} value={s}>{s}</option> ))}
-              </select>
+              {(formData.status === 'won' || formData.status === 'lost') ? (
+                <div style={{
+                  padding: '10px 14px', background: '#f8fafc', borderRadius: '8px',
+                  border: '1px solid #e2e8f0', fontSize: '13px', color: '#64748b',
+                  display: 'flex', alignItems: 'center', gap: '8px'
+                }}>
+                  <span>🔒</span>
+                  <span>
+                    {formData.status === 'won' ? 'Completed — Job Won' : `${formData.stage} — Lead Lost (Frozen)`}
+                  </span>
+                </div>
+              ) : (
+                <select className="form-input" value={formData.stage || "New Enquiry"} onChange={(e) => setFormData({ ...formData, stage: e.target.value })}>
+                  {STAGES.map((s) => ( <option key={s} value={s}>{s}</option> ))}
+                </select>
+              )}
             </div>
 
             {formData.status === 'lost' && (
               <div className="form-group" style={{ padding: '16px', background: '#fef2f2', borderRadius: '12px', border: '1px solid #fee2e2' }}>
                 <label className="form-label" style={{ color: '#dc2626' }}>Reason for Loss</label>
-                <input 
-                  className="form-input" 
-                  placeholder="Why was this lead lost?" 
-                  value={formData.loss_reason || ""} 
-                  onChange={(e) => setFormData({ ...formData, loss_reason: e.target.value })} 
-                />
+                <select
+                  className="form-input"
+                  value={formData.loss_reason || ""}
+                  onChange={(e) => setFormData({ ...formData, loss_reason: e.target.value })}
+                >
+                  <option value="">Select a reason...</option>
+                  <option value="Price too high">Price too high</option>
+                  <option value="No response from customer">No response from customer</option>
+                  <option value="Customer went with competitor">Customer went with competitor</option>
+                  <option value="Job cancelled by customer">Job cancelled by customer</option>
+                  <option value="Out of service area">Out of service area</option>
+                  <option value="Other — see notes">Other (describe in notes field)</option>
+                </select>
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-              <div className="form-group">
-                <label className="form-label">Visit Date</label>
-                <input type="date" className="form-input" value={formData.visit_date || ""} onChange={(e) => setFormData({ ...formData, visit_date: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Job Date</label>
-                <input type="date" className="form-input" value={formData.job_date || ""} onChange={(e) => setFormData({ ...formData, job_date: e.target.value })} />
-              </div>
-            </div>
+            {(() => {
+              const visitRequired = formData.stage === 'Site Visit Scheduled';
+              const jobRequired = formData.stage === 'Job Scheduled' || formData.stage === 'In Progress';
+              const visitMissing = visitRequired && !formData.visit_date;
+              const jobMissing = jobRequired && !formData.job_date;
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Visit Date
+                      {visitRequired && <span style={{ fontSize: '10px', fontWeight: 800, color: visitMissing ? '#dc2626' : '#10b981', background: visitMissing ? '#fee2e2' : '#dcfce7', padding: '1px 6px', borderRadius: '4px' }}>REQUIRED</span>}
+                    </label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={formData.visit_date || ""}
+                      onChange={(e) => setFormData({ ...formData, visit_date: e.target.value })}
+                      style={visitMissing ? { borderColor: '#fca5a5', background: '#fff5f5' } : {}}
+                    />
+                    {visitMissing && <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', fontWeight: 600 }}>⚠ A visit date is required for this stage</div>}
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      Job Date
+                      {jobRequired && <span style={{ fontSize: '10px', fontWeight: 800, color: jobMissing ? '#dc2626' : '#10b981', background: jobMissing ? '#fee2e2' : '#dcfce7', padding: '1px 6px', borderRadius: '4px' }}>REQUIRED</span>}
+                    </label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={formData.job_date || ""}
+                      onChange={(e) => setFormData({ ...formData, job_date: e.target.value })}
+                      style={jobMissing ? { borderColor: '#fca5a5', background: '#fff5f5' } : {}}
+                    />
+                    {jobMissing && <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', fontWeight: 600 }}>⚠ A job date is required for this stage</div>}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="form-group">
               <label className="form-label">Internal Notes</label>
@@ -507,35 +599,43 @@ export default function JobModal({
                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
                  Material Consumption Log
                </label>
-               
-               {materials.length > 0 && (
-                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                   {materials.map((m, idx) => (
-                     <div key={m.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                        <div>
-                          <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{m.item_name}</div>
-                          <div style={{ fontSize: '12px', color: '#64748b' }}>{m.quantity_used} {m.unit}</div>
-                        </div>
-                        <button type="button" onClick={() => handleRemoveMaterial(m, idx)} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                        </button>
-                     </div>
-                   ))}
-                 </div>
-               )}
 
-               <div style={{ display: 'flex', gap: '12px' }}>
-                  <select className="form-input" style={{ flex: 1 }} value={selectedItem} onChange={e => setSelectedItem(e.target.value)}>
-                    <option value="">Select Inventory Item</option>
-                    {inventory.map(inv => (
-                      <option key={inv.id} value={inv.id} disabled={inv.stock_quantity <= 0}>
-                        {inv.name} ({inv.stock_quantity} available)
-                      </option>
-                    ))}
-                  </select>
-                  <input type="number" className="form-input" style={{ width: '80px' }} placeholder="Qty" value={useQty} onChange={e => setUseQty(e.target.value)} />
-                  <button type="button" onClick={handleAddMaterial} style={{ padding: '0 20px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '12px', fontWeight: 600, cursor: 'pointer' }}>Log</button>
-               </div>
+               {!['Job Scheduled', 'In Progress', 'Completed'].includes(formData.stage || '') ? (
+                 <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '13px', background: '#f1f5f9', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                   📋 Materials can be logged once the job is scheduled or in progress.
+                 </div>
+               ) : (
+                 <>
+                   {materials.length > 0 && (
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                       {materials.map((m, idx) => (
+                         <div key={m.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                            <div>
+                              <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{m.item_name}</div>
+                              <div style={{ fontSize: '12px', color: '#64748b' }}>{m.quantity_used} {m.unit}</div>
+                            </div>
+                            <button type="button" onClick={() => handleRemoveMaterial(m, idx)} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                            </button>
+                         </div>
+                       ))}
+                     </div>
+                   )}
+
+                   <div style={{ display: 'flex', gap: '12px' }}>
+                      <select className="form-input" style={{ flex: 1 }} value={selectedItem} onChange={e => setSelectedItem(e.target.value)}>
+                        <option value="">Select Inventory Item</option>
+                        {inventory.map(inv => (
+                          <option key={inv.id} value={inv.id} disabled={inv.stock_quantity <= 0}>
+                            {inv.name} ({inv.stock_quantity} available)
+                          </option>
+                        ))}
+                      </select>
+                      <input type="number" className="form-input" style={{ width: '80px' }} placeholder="Qty" value={useQty} onChange={e => setUseQty(e.target.value)} />
+                      <button type="button" onClick={handleAddMaterial} style={{ padding: '0 20px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '12px', fontWeight: 600, cursor: 'pointer' }}>Log</button>
+                   </div>
+                 </>
+               )}
             </div>
 
             <div className="modal-actions" style={{ position: 'sticky', bottom: 0, background: '#fff', padding: '24px 0 0 0', borderTop: '1px solid #f1f5f9', marginTop: '12px', display: 'flex', gap: '12px' }}>

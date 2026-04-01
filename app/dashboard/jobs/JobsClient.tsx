@@ -73,6 +73,16 @@ export default function JobsClient({
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Quick Date Entry States
+  const [showDatePrompt, setShowDatePrompt] = useState(false);
+  const [pendingUpdate, setPendingUpdate] = useState<{
+    jobId: string;
+    newStage: string;
+    dateField: "visit_date" | "job_date";
+    title: string;
+  } | null>(null);
+  const [dateInput, setDateInput] = useState("");
+
   const supabase = createClient();
   const router = useRouter();
 
@@ -121,7 +131,34 @@ export default function JobsClient({
     return matchesSearch && matchesService && matchesTech && matchesDate && matchesOutcome;
   });
 
+  const [stageBlockMsg, setStageBlockMsg] = useState<string | null>(null);
+
   const handleDragDrop = async (jobId: string, newStage: string) => {
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) return;
+
+    // Validate required dates before allowing stage change
+    if (newStage === 'Site Visit Scheduled' && !job.visit_date) {
+      setPendingUpdate({
+        jobId,
+        newStage,
+        dateField: 'visit_date',
+        title: 'Set Visit Date'
+      });
+      setShowDatePrompt(true);
+      return;
+    }
+    if ((newStage === 'Job Scheduled' || newStage === 'In Progress') && !job.job_date) {
+      setPendingUpdate({
+        jobId,
+        newStage,
+        dateField: 'job_date',
+        title: 'Set Job Date'
+      });
+      setShowDatePrompt(true);
+      return;
+    }
+
     // Optimistic update
     setJobs(jobs.map((j) => (j.id === jobId ? { ...j, stage: newStage } : j)));
 
@@ -133,9 +170,38 @@ export default function JobsClient({
 
     if (error) {
       console.error("Error updating stage:", error);
-      // Revert on error could be implemented here
+      // Revert on error
+      setJobs(prev => prev.map(j => j.id === jobId ? { ...j, stage: job.stage } : j));
     }
   };
+
+  const handleDatePromptSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pendingUpdate || !dateInput) return;
+    const { jobId, newStage, dateField } = pendingUpdate;
+
+    // Optimistic update
+    setJobs(jobs.map((j) => (j.id === jobId ? { ...j, stage: newStage, [dateField]: dateInput } : j)));
+
+    // Save to server
+    const { error } = await supabase
+      .from("jobs")
+      .update({ 
+        stage: newStage, 
+        [dateField]: dateInput 
+      })
+      .eq("id", jobId);
+
+    if (error) {
+      alert("Error updating job: " + error.message);
+      router.refresh();
+    }
+
+    setShowDatePrompt(false);
+    setPendingUpdate(null);
+    setDateInput("");
+  };
+
 
   const openNewJob = () => {
     setSelectedJob(null);
@@ -280,11 +346,13 @@ export default function JobsClient({
             style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13.5, background: '#fff' }}
           >
             <option value="All">All Services</option>
-            <option value="Installation">Installation</option>
-            <option value="Repair">Repair</option>
             <option value="Servicing">Servicing</option>
+            <option value="Repair">Repair</option>
+            <option value="Installation">Installation</option>
             <option value="Chemical Wash">Chemical Wash</option>
-            <option value="Overhaul">Overhaul</option>
+            <option value="Chemical Overhaul">Chemical Overhaul</option>
+            <option value="Gas Top-Up">Gas Top-Up</option>
+            <option value="Dismantling">Dismantling</option>
           </select>
 
           {role === "admin" && (
@@ -340,7 +408,21 @@ export default function JobsClient({
       </div>
 
       <div className="dashboard-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, padding: viewMode === 'list' ? '24px 28px' : '24px 28px 0' }}>
+
+        {/* Stage-change blocked notification */}
+        {stageBlockMsg && (
+          <div style={{
+            background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '10px',
+            padding: '12px 18px', marginBottom: '16px',
+            display: 'flex', alignItems: 'center', gap: '10px',
+            fontSize: '13.5px', fontWeight: 600, color: '#dc2626'
+          }}>
+            {stageBlockMsg}
+          </div>
+        )}
+
         {viewMode === "board" ? (
+
           <div className="pipeline-container" style={{ flex: 1, height: 'auto', maxHeight: '100%' }}>
             {STAGES.map((stage) => {
               const columnJobs = filteredJobs.filter((j) => j.stage === stage);
@@ -375,6 +457,61 @@ export default function JobsClient({
           role={role}
           staffProfiles={staffProfiles}
         />
+      )}
+
+      {/* QUICK DATE PROMPT MODAL */}
+      {showDatePrompt && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1100, padding: '20px'
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: '24px', width: '100%', maxWidth: '380px',
+            padding: '32px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+            border: '1px solid #e2e8f0'
+          }}>
+             <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', marginBottom: '8px', letterSpacing: '-0.4px' }}>
+                {pendingUpdate?.title || 'Action Required'}
+             </h3>
+             <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px', lineHeight: 1.5 }}>
+                A date is required before you can move this job to <strong>{pendingUpdate?.newStage}</strong>. Please set it below:
+             </p>
+
+             <form onSubmit={handleDatePromptSubmit}>
+                <div style={{ marginBottom: '24px' }}>
+                   <label style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px' }}>
+                      Select Date
+                   </label>
+                   <input 
+                     type="date" 
+                     required
+                     className="form-input" 
+                     value={dateInput}
+                     onChange={(e) => setDateInput(e.target.value)}
+                     style={{ width: '100%', fontSize: '15px' }}
+                   />
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px' }}>
+                   <button 
+                     type="button"
+                     onClick={() => { setShowDatePrompt(false); setPendingUpdate(null); setDateInput(""); }}
+                     style={{ flex: 1, padding: '12px', background: '#f1f5f9', color: '#475569', borderRadius: '12px', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+                   >
+                     Cancel
+                   </button>
+                   <button 
+                     type="submit"
+                     style={{ flex: 1, padding: '12px', background: '#0f172a', color: '#fff', borderRadius: '12px', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+                   >
+                     Confirm & Move
+                   </button>
+                </div>
+             </form>
+          </div>
+        </div>
       )}
     </div>
   );

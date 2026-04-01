@@ -194,9 +194,16 @@ export default function CustomerDetailClient({
                       <div style={{ textAlign: 'right' }}>
                          <div style={{ fontSize: '16px', fontWeight: 800, color: '#1e293b' }}>${Number(j.quoted_amount).toFixed(2)}</div>
                          {j.payment_status === 'Paid' ? (
-                           <span style={{ fontSize: '10px', color: '#059669', background: '#ecfdf5', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase' }}>Paid</span>
+                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', marginTop: '4px' }}>
+                             <span style={{ fontSize: '10px', color: '#059669', background: '#ecfdf5', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase' }}>Paid</span>
+                             {j.payment_collected_at && (
+                               <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 600 }}>Collected: {new Date(j.payment_collected_at).toLocaleDateString()}</span>
+                             )}
+                           </div>
                          ) : (
-                           <span style={{ fontSize: '10px', color: '#d97706', background: '#fffbeb', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase' }}>Unpaid</span>
+                           <div style={{ marginTop: '4px' }}>
+                             <span style={{ fontSize: '10px', color: '#d97706', background: '#fffbeb', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase' }}>Unpaid</span>
+                           </div>
                          )}
                       </div>
                     </Link>
