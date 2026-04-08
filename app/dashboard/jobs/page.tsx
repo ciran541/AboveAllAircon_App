@@ -26,7 +26,7 @@ export default async function JobsPage() {
   // Fetch initial jobs
   const { data: initialJobs } = await supabase
     .from("jobs")
-    .select("*, customers(name, phone, address)")
+    .select("*, customers(name, phone, address, unit_type)")
     .order("created_at", { ascending: false });
 
   let staffProfiles: { id: string; role: string; full_name?: string; email?: string }[] = [];

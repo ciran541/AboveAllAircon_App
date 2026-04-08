@@ -1,6 +1,6 @@
 "use client";
 
-import { Job, STAGES } from "./JobsClient";
+import { Job, getStageDisplay } from "./JobsClient";
 
 export default function JobListView({
   jobs,
@@ -64,19 +64,8 @@ export default function JobListView({
                       color: job.stage === 'Completed' ? '#166534' : '#2563eb',
                       textTransform: 'uppercase'
                     }}>
-                      {job.stage}
+                      {getStageDisplay(job.stage)}
                     </span>
-                    {job.status && job.status !== 'open' && (
-                      <span style={{ 
-                        marginLeft: '8px', fontSize: '10px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px',
-                        background: job.status === 'won' ? '#f0fdf4' : '#fef2f2',
-                        color: job.status === 'won' ? '#16a34a' : '#dc2626',
-                        border: `1px solid ${job.status === 'won' ? '#bbf7d0' : '#fecaca'}`,
-                        textTransform: 'uppercase'
-                      }}>
-                        {job.status}
-                      </span>
-                    )}
                   </td>
                   <td style={{ padding: '14px 20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

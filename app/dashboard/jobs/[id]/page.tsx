@@ -18,7 +18,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     .from('jobs')
     .select(`
       *,
-      customers (*)
+      customers (id, name, phone, email, address, unit_type)
     `)
     .eq('id', id)
     .single()
