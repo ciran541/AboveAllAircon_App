@@ -4,7 +4,11 @@ import CustomersClient from "./CustomersClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function CustomersPage() {
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ search?: string; limit?: string }>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -14,11 +18,38 @@ export default async function CustomersPage() {
     redirect("/login");
   }
 
-  // Fetch customers with their related job counts
-  const { data: customers } = await supabase
+  const resolvedParams = await searchParams;
+  const search = resolvedParams?.search || "";
+  const limit = parseInt(resolvedParams?.limit || "20", 10);
+
+  let query = supabase
     .from("customers")
     .select("*, jobs(id)")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(limit);
 
-  return <CustomersClient initialCustomers={customers || []} />;
+  if (search) {
+    query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
+  }
+
+  const { data: customers } = await query;
+
+  // Also get total count to know if we can load more
+  let countQuery = supabase
+    .from("customers")
+    .select("*", { count: "exact", head: true });
+    
+  if (search) {
+     countQuery = countQuery.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
+  }
+  const { count } = await countQuery;
+
+  return (
+    <CustomersClient 
+       initialCustomers={customers || []} 
+       totalCount={count || 0} 
+       search={search}
+       limit={limit}
+    />
+  );
 }

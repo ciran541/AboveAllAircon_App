@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useState, useTransition } from "react";
 import JobColumn from "./JobColumn";
 import JobListView from "./JobListView";
 import JobModal from "./JobModal";
 import { useRouter } from "next/navigation";
+import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal } from "@/components/StageModals";
+import { updateJobStage, deleteJob } from "@/app/actions/jobActions";
 
 export type Job = {
   id: string;
@@ -91,19 +92,17 @@ export default function JobsClient({
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Quick Date Entry States
-  const [showDatePrompt, setShowDatePrompt] = useState(false);
-  const [pendingUpdate, setPendingUpdate] = useState<{
-    jobId: string;
-    newStage: string;
-    title: string;
-  } | null>(null);
-  const [dateInput, setDateInput] = useState("");
-  const [timeInput, setTimeInput] = useState("");
-  const [phoneInput, setPhoneInput] = useState("");
+  // Stage action modals
+  const [pendingJob, setPendingJob] = useState<Job | null>(null);
+  const [targetStage, setTargetStage] = useState<string>("");
+  const [showSiteVisitModal, setShowSiteVisitModal] = useState(false);
+  const [showQuotationModal, setShowQuotationModal] = useState(false);
+  const [showWhatsAppTemplate, setShowWhatsAppTemplate] = useState(false);
+  const [whatsappText, setWhatsappText] = useState("");
+  const [showConfirmJobModal, setShowConfirmJobModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
-
-  const supabase = createClient();
   const router = useRouter();
 
   const isWithinRange = (dateStr: string | null, range: string) => {
@@ -142,68 +141,78 @@ export default function JobsClient({
     return matchesSearch && matchesService && matchesTech && matchesDate;
   });
 
+  const advanceStageJobsClient = async (jobId: string, newStage: string, updates: any) => {
+    setActionLoading(true);
+    const dbStage = newStage === "First Visit" ? "In Progress" : newStage;
+    const finalUpdates = { stage: dbStage, ...updates };
+
+    // Optimistic Update
+    setJobs(jobs.map((j) => (j.id === jobId ? { ...j, ...finalUpdates } : j)));
+    
+    startTransition(async () => {
+      const result = await updateJobStage(jobId, newStage, updates);
+      if (result.error) {
+        alert("Error updating job: " + result.error);
+        router.refresh(); // rollback on error
+      }
+      setActionLoading(false);
+    });
+  };
+
   const handleDragDrop = async (jobId: string, newStage: string) => {
     const job = jobs.find((j) => j.id === jobId);
     if (!job) return;
 
-    if (newStage === "Site Visit Scheduled" && !job.visit_date) {
-      setPendingUpdate({ jobId, newStage, title: "Schedule Site Visit" });
-      setDateInput(job.visit_date || "");
-      setTimeInput(job.visit_time || "");
-      setPhoneInput(job.visit_phone || job.customers?.phone || "");
-      setShowDatePrompt(true);
-      return;
-    }
-    if ((newStage === "Job Scheduled" || newStage === "First Visit") && !job.job_date) {
-      setPendingUpdate({ jobId, newStage, title: "Schedule Job" });
-      setDateInput(job.job_date || "");
-      setTimeInput(job.job_time || "");
-      setShowDatePrompt(true);
+    const currentIndex = STAGES.indexOf(normalizeStage(job.stage));
+    const newIndex = STAGES.indexOf(newStage);
+
+    if (newIndex < currentIndex) {
+      alert("Workflow restriction: Jobs cannot be moved backwards to a previous stage.");
       return;
     }
 
+    if (newStage === "Site Visit Scheduled") {
+      setPendingJob(job);
+      setShowSiteVisitModal(true);
+      return;
+    }
+    if (newStage === "Quotation Sent") {
+      setPendingJob(job);
+      setShowQuotationModal(true);
+      return;
+    }
+    if (newStage === "Job Scheduled" || newStage === "First Visit") {
+      setPendingJob(job);
+      setTargetStage(newStage);
+      setShowConfirmJobModal(true);
+      return;
+    }
 
     // Map "First Visit" back to DB value "In Progress" for now
-    const dbStage = newStage === "First Visit" ? "In Progress" : newStage;
-    setJobs(jobs.map((j) => (j.id === jobId ? { ...j, stage: dbStage } : j)));
-    const { error } = await supabase.from("jobs").update({ stage: dbStage }).eq("id", jobId);
-    if (error) {
-      console.error("Error updating stage:", error);
-      setJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, stage: job.stage } : j)));
-    }
+    await advanceStageJobsClient(jobId, newStage, {});
   };
 
-  const handleDatePromptSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pendingUpdate || !dateInput) return;
-    const { jobId, newStage } = pendingUpdate;
-    
-    const dbStage = newStage === "First Visit" ? "In Progress" : newStage;
-    const updates: any = { stage: dbStage };
-    
-    if (newStage === "Site Visit Scheduled") {
-      updates.visit_date = dateInput;
-      updates.visit_time = timeInput || null;
-      updates.visit_phone = phoneInput || null;
-    } else if (newStage === "Job Scheduled" || newStage === "First Visit") {
-      updates.job_date = dateInput;
-      updates.job_time = timeInput || null;
-    }
+  const handleSiteVisitSubmit = async (updates: any) => {
+    if (!pendingJob) return;
+    await advanceStageJobsClient(pendingJob.id, "Site Visit Scheduled", updates);
+    setShowSiteVisitModal(false);
+    setPendingJob(null);
+  };
 
-    setJobs(jobs.map((j) => (j.id === jobId ? { ...j, ...updates } : j)));
-    
-    const { error } = await supabase.from("jobs").update(updates).eq("id", jobId);
-    
-    if (error) { 
-      alert("Error updating job: " + error.message); 
-      router.refresh(); 
-    }
-    
-    setShowDatePrompt(false);
-    setPendingUpdate(null);
-    setDateInput("");
-    setTimeInput("");
-    setPhoneInput("");
+  const handleQuotationSubmit = async (updates: any, wpText: string) => {
+    if (!pendingJob) return;
+    await advanceStageJobsClient(pendingJob.id, "Quotation Sent", updates);
+    setWhatsappText(wpText);
+    setShowQuotationModal(false);
+    setShowWhatsAppTemplate(true);
+  };
+
+  const handleConfirmJobSubmit = async (updates: any) => {
+    if (!pendingJob) return;
+    await advanceStageJobsClient(pendingJob.id, targetStage || "Job Scheduled", updates);
+    setShowConfirmJobModal(false);
+    setPendingJob(null);
+    setTargetStage("");
   };
 
 
@@ -226,9 +235,11 @@ export default function JobsClient({
   const confirmDeleteJob = async () => {
     if (!jobToDelete) return;
     setDeleteLoading(true);
-    const { error } = await supabase.from("jobs").delete().eq("id", jobToDelete.id);
-    if (error) {
-      alert("Error deleting job: " + error.message);
+    
+    const result = await deleteJob(jobToDelete.id);
+    
+    if (result.error) {
+      alert("Error deleting job: " + result.error);
     } else {
       setJobs((prev) => prev.filter((j) => j.id !== jobToDelete.id));
     }
@@ -377,39 +388,24 @@ export default function JobsClient({
         />
       )}
 
-      {showDatePrompt && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(15,23,42,0.4)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, padding: "20px" }}>
-          <div style={{ background: "#fff", borderRadius: "24px", width: "100%", maxWidth: "420px", padding: "32px", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)", border: "1px solid #e2e8f0" }}>
-            <h3 style={{ fontSize: "18px", fontWeight: 800, color: "#0f172a", marginBottom: "8px", letterSpacing: "-0.4px" }}>{pendingUpdate?.title || "Action Required"}</h3>
-            <p style={{ fontSize: "14px", color: "#64748b", marginBottom: "24px", lineHeight: 1.5 }}>
-              Enter the schedule details for <strong>{pendingUpdate?.newStage}</strong>.
-            </p>
-            <form onSubmit={handleDatePromptSubmit}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "24px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  <div>
-                    <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "8px" }}>Date *</label>
-                    <input type="date" required className="form-input" value={dateInput} onChange={(e) => setDateInput(e.target.value)} style={{ width: "100%" }} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "8px" }}>Time</label>
-                    <input type="time" className="form-input" value={timeInput} onChange={(e) => setTimeInput(e.target.value)} style={{ width: "100%" }} />
-                  </div>
-                </div>
-                {pendingUpdate?.newStage === "Site Visit Scheduled" && (
-                  <div>
-                    <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: "8px" }}>Contact Phone</label>
-                    <input className="form-input" placeholder="Phone number" value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} style={{ width: "100%" }} />
-                  </div>
-                )}
-              </div>
-              <div style={{ display: "flex", gap: "12px" }}>
-                <button type="button" onClick={() => { setShowDatePrompt(false); setPendingUpdate(null); setDateInput(""); setTimeInput(""); setPhoneInput(""); }} style={{ flex: 1, padding: "12px", background: "#f1f5f9", color: "#475569", borderRadius: "12px", fontWeight: 700, border: "none", cursor: "pointer" }}>Cancel</button>
-                <button type="submit" style={{ flex: 1, padding: "12px", background: "#0f172a", color: "#fff", borderRadius: "12px", fontWeight: 700, border: "none", cursor: "pointer" }}>Confirm & Move</button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {/* ══ SITE VISIT MODAL ══ */}
+      {showSiteVisitModal && pendingJob && (
+        <SiteVisitModal job={pendingJob} loading={actionLoading} onClose={() => setShowSiteVisitModal(false)} onSubmit={handleSiteVisitSubmit} />
+      )}
+
+      {/* ══ QUOTATION MODAL ══ */}
+      {showQuotationModal && pendingJob && (
+        <QuotationModal job={pendingJob} loading={actionLoading} onClose={() => setShowQuotationModal(false)} onSubmit={handleQuotationSubmit} />
+      )}
+
+      {/* ══ WHATSAPP TEMPLATE MODAL ══ */}
+      {showWhatsAppTemplate && (
+        <WhatsAppTemplateModal whatsappText={whatsappText} onClose={() => setShowWhatsAppTemplate(false)} />
+      )}
+
+      {/* ══ CONFIRM JOB MODAL ══ */}
+      {showConfirmJobModal && pendingJob && (
+        <ConfirmJobModal job={pendingJob} loading={actionLoading} onClose={() => setShowConfirmJobModal(false)} onSubmit={handleConfirmJobSubmit} />
       )}
 
 

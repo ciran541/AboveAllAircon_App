@@ -23,11 +23,14 @@ export default async function JobsPage() {
 
   const role: "admin" | "staff" = profile?.role ?? "staff";
 
+  const limit = 300; // Hard cap for initial Kanban load to maintain lightning-fast performance
+
   // Fetch initial jobs
   const { data: initialJobs } = await supabase
     .from("jobs")
     .select("*, customers(name, phone, address, unit_type)")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(limit);
 
   let staffProfiles: { id: string; role: string; full_name?: string; email?: string }[] = [];
   if (role === "admin") {

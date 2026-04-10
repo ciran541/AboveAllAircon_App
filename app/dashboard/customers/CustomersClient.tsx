@@ -1,20 +1,44 @@
 "use client";
 
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { saveCustomer } from "@/app/actions/customerActions";
 
-export default function CustomersClient({ initialCustomers }: { initialCustomers: any[] }) {
-  const [customers, setCustomers] = useState(initialCustomers);
-  const [searchQuery, setSearchQuery] = useState("");
+export default function CustomersClient({ 
+  initialCustomers, 
+  totalCount,
+  search,
+  limit
+}: { 
+  initialCustomers: any[];
+  totalCount: number;
+  search: string;
+  limit: number;
+}) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   
-  const [formData, setFormData] = useState({ id: "", name: "", phone: "", address: "", email: "" });
+  // Local state for the search input to allow fast typing before debouncing to router
+  const [localSearch, setLocalSearch] = useState(search);
+  const [isPending, startTransition] = useTransition();
 
-  const supabase = createClient();
+  const [formData, setFormData] = useState({ id: "", name: "", phone: "", address: "", email: "" });
   const router = useRouter();
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== search) {
+        let url = `/dashboard/customers?`;
+        if (localSearch) url += `search=${encodeURIComponent(localSearch)}&`;
+        url += `limit=20`;
+        startTransition(() => {
+          router.push(url, { scroll: false });
+        });
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [localSearch, search, router]);
 
   const handleOpenModal = (customer?: any) => {
     if (customer) {
@@ -29,54 +53,30 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
     e.preventDefault();
     setLoading(true);
 
-    if (formData.id) {
-      // Update
-      const { data, error } = await supabase
-        .from("customers")
-        .update({
-          name: formData.name,
-          phone: formData.phone || null,
-          address: formData.address || null,
-          email: formData.email || null,
-        })
-        .eq("id", formData.id)
-        .select()
-        .single();
+    const result = await saveCustomer({
+      id: formData.id,
+      name: formData.name,
+      phone: formData.phone,
+      email: formData.email,
+      address: formData.address,
+    });
 
-      if (!error && data) {
-        setCustomers(customers.map((c) => (c.id === data.id ? { ...data, jobs: c.jobs } : c)));
-        setIsModalOpen(false);
-      } else {
-        alert(error?.message);
-      }
+    if (result.error) {
+      alert(result.error);
     } else {
-      // Insert
-      const { data, error } = await supabase
-        .from("customers")
-        .insert([{
-          name: formData.name,
-          phone: formData.phone || null,
-          address: formData.address || null,
-          email: formData.email || null,
-        }])
-        .select()
-        .single();
-
-      if (!error && data) {
-        setCustomers([{ ...data, jobs: [] }, ...customers]);
-        setIsModalOpen(false);
-      } else {
-        alert(error?.message);
-      }
+      setIsModalOpen(false);
     }
+    
     setLoading(false);
   };
 
-  const filteredCustomers = customers.filter(
-    (c) =>
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.phone && c.phone.includes(searchQuery))
-  );
+  const loadMore = () => {
+    startTransition(() => {
+      let url = `/dashboard/customers?limit=${limit + 20}`;
+      if (search) url += `&search=${encodeURIComponent(search)}`;
+      router.push(url, { scroll: false });
+    });
+  };
 
   return (
     <div style={{ padding: "24px", maxWidth: "1200px", margin: "0 auto", color: "#0f172a" }}>
@@ -86,7 +86,7 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
             Customer Directory
           </h1>
           <p style={{ color: "#64748b", margin: 0, fontSize: "15px" }}>
-            Manage client profiles and service history ({customers.length} total)
+            Manage client profiles and service history ({totalCount} total)
           </p>
         </div>
         <button
@@ -98,7 +98,7 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
         </button>
       </div>
 
-      <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)", overflow: "hidden" }}>
+      <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)", overflow: "hidden", opacity: isPending ? 0.7 : 1, transition: 'opacity 0.2s' }}>
         
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
           <div style={{ position: "relative", maxWidth: "400px" }}>
@@ -108,8 +108,8 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
             <input
               type="text"
               placeholder="Search by name or phone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
               style={{ width: "100%", padding: "10px 14px 10px 40px", borderRadius: "8px", border: "1px solid #cbd5e1", outline: "none", fontSize: "14px" }}
               onFocus={e => e.target.style.borderColor = "#3b82f6"}
               onBlur={e => e.target.style.borderColor = "#cbd5e1"}
@@ -129,14 +129,14 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
               </tr>
             </thead>
             <tbody>
-              {filteredCustomers.length === 0 ? (
+              {initialCustomers.length === 0 ? (
                 <tr>
                   <td colSpan={5} style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>
-                    No customers found matching "{searchQuery}"
+                    {localSearch ? `No customers found matching "${localSearch}"` : "No customers found."}
                   </td>
                 </tr>
               ) : (
-                filteredCustomers.map((c) => (
+                initialCustomers.map((c) => (
                   <tr key={c.id} 
                     onClick={() => router.push(`/dashboard/customers/${c.id}`)}
                     style={{ borderTop: "1px solid #f1f5f9", cursor: "pointer", transition: "background 0.1s" }}
@@ -163,7 +163,7 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "right" }}>
                       <button
-                        onClick={() => handleOpenModal(c)}
+                        onClick={(e) => { e.stopPropagation(); handleOpenModal(c); }}
                         style={{ background: "none", border: "none", color: "#3b82f6", fontWeight: "600", cursor: "pointer", padding: "6px 12px", borderRadius: "6px" }}
                         onMouseEnter={e => e.currentTarget.style.background = "#eff6ff"}
                         onMouseLeave={e => e.currentTarget.style.background = "transparent"}
@@ -178,6 +178,19 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
           </table>
         </div>
       </div>
+      
+      {initialCustomers.length > 0 && initialCustomers.length < totalCount && (
+         <div style={{ textAlign: "center", marginTop: "24px" }}>
+           <button 
+             onClick={loadMore} 
+             disabled={isPending}
+             className="btn-secondary" 
+             style={{ padding: "8px 24px" }}
+           >
+             {isPending ? "Loading..." : "Load More Customers"}
+           </button>
+         </div>
+      )}
 
       {isModalOpen && (
         <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>

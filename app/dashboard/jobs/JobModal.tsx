@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { Job, STAGES } from "./JobsClient";
+import { saveJob } from "@/app/actions/jobActions";
+import { createClient } from "@/lib/supabase/client";
 
 type Customer = { id: string; name: string; phone: string | null; address: string | null; unit_type?: string | null; };
 
@@ -93,25 +94,19 @@ export default function JobModal({
 
     let finalCustomerId = formData.customer_id;
 
+    let newCustomerData;
     if (isNewCustomer) {
       if (!newCustomer.name.trim()) {
         setError("Customer name is required.");
         setLoading(false);
         return;
       }
-      const { data: newCustData, error: custErr } = await supabase
-        .from("customers")
-        .insert([{
+      newCustomerData = {
           name: newCustomer.name,
           phone: newCustomer.phone || null,
           address: newCustomer.address || null,
           unit_type: newCustomer.unit_type || null,
-        }])
-        .select()
-        .single();
-
-      if (custErr) { setError(custErr.message); setLoading(false); return; }
-      finalCustomerId = newCustData.id;
+      };
     }
 
     const dataToSave: any = { ...formData, customer_id: finalCustomerId };
@@ -123,31 +118,21 @@ export default function JobModal({
     if (!dataToSave.visit_date) dataToSave.visit_date = null;
     if (!dataToSave.job_date) dataToSave.job_date = null;
     if (!dataToSave.assigned_to) dataToSave.assigned_to = null;
-    if (!dataToSave.unit_count) dataToSave.unit_count = 0;
+    if (!dataToSave.unit_count) dataToSave.unit_count = 1;
     if (!dataToSave.quoted_amount) dataToSave.quoted_amount = 0;
-    dataToSave.labor_cost = 0;
-    dataToSave.material_cost = 0;
-
-    let savedJob = null;
+    
     if (isNew) {
       dataToSave.created_by = userId;
-      const { data, error: insertError } = await supabase.from("jobs").insert([dataToSave]).select().single();
-      if (insertError) setError(insertError.message);
-      else savedJob = data;
-    } else {
-      const { data, error: updateError } = await supabase.from("jobs").update(dataToSave).eq("id", job!.id).select().single();
-      if (updateError) setError(updateError.message);
-      else savedJob = data;
     }
 
-    if (savedJob) {
-      const { data: fullJob } = await supabase
-        .from("jobs")
-        .select("*, customers(*)")
-        .eq("id", savedJob.id)
-        .single();
-      onSave(fullJob || savedJob);
+    const response = await saveJob(dataToSave, newCustomerData);
+
+    if (response.error) {
+       setError(response.error);
+    } else if (response.savedJob) {
+       onSave(response.savedJob);
     }
+    
     setLoading(false);
   };
 

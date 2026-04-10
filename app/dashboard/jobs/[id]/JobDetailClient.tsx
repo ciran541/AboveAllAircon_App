@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import InvoicePreviewModal from "@/components/InvoicePreviewModal";
+import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal } from "@/components/StageModals";
 
 const STAGES = [
   "New Enquiry",
@@ -46,56 +47,6 @@ export default function JobDetailClient({
   const [showWhatsAppTemplate, setShowWhatsAppTemplate] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [whatsappText, setWhatsappText] = useState("");
-  const [copied, setCopied] = useState(false);
-
-  // Site Visit form
-  const [svDate, setSvDate] = useState("");
-  const [svTime, setSvTime] = useState("");
-  const [svPhone, setSvPhone] = useState(job.customers?.phone || "");
-  const [svAddress, setSvAddress] = useState(job.customers?.address || "");
-
-  // Quotation form
-  const [qBrand, setQBrand] = useState(job.ac_brand || "");
-  const [qUnits, setQUnits] = useState(job.unit_count || 1);
-  const [qService, setQService] = useState(job.service_type || "");
-  const [qItems, setQItems] = useState("");
-  const [qAmount, setQAmount] = useState(job.quoted_amount || 0);
-  const [qNotes, setQNotes] = useState("");
-  const [qEngineer, setQEngineer] = useState("Jackie");
-  const [qCustomBreakdown, setQCustomBreakdown] = useState(`Mitsubishi Starmex R32 4Ticks
-
-MUYGP24VF2 (Outdoor Unit)
-MSYGP24VF (Indoor Unit)
-24k BTU - $2030nett
-System 1
-
-Mitsubishi Starmex R32 5Ticks
-
-MXY2H20VF (Outdoor Unit)
-MSXYFP13VG x 2 (Indoor Unit)
-12k, 12k BTU - $2360nett
-System 2 
-
-A water pump is required - $200nett
-
-x2 stainless-steel brackets - $300nett ($150/each)
-
- Total: $4890nett`);
-  const [qMaterials, setQMaterials] = useState(`✔22g copper pipings
-✔Keystone cables 3c40/3c70 (local brand)
-✔1/2 inch class 0 kflex
-✔16mm drainage pipe with insulation
-✔DNE TRUNKINGS`);
-  const [qWarranty, setQWarranty] = useState(`✔ 5 years compressor by Mitsubishi
-✔ 1 year fan coil by Mitsubishi
-✔ 3 years workmanship for the new pipings work`);
-
-  // Confirm Job form
-  const [cjDate, setCjDate] = useState(job.job_date || "");
-  const [cjTime, setCjTime] = useState(job.job_time || "");
-  const [cjDeposit, setCjDeposit] = useState(job.deposit_amount || 0);
-  const [cjCollected, setCjCollected] = useState(job.deposit_collected || 0);
-
 
   // Material management
   const [inventory, setInventory] = useState<any[]>([]);
@@ -130,56 +81,21 @@ x2 stainless-steel brackets - $300nett ($150/each)
   };
 
   // ── Site Visit submit ──────────────────────────────────────
-  const handleSiteVisitSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!svDate) return;
-    await advanceStage("Site Visit Scheduled", {
-      visit_date: svDate,
-      visit_time: svTime || null,
-      visit_phone: svPhone || null,
-    });
+  const handleSiteVisitSubmit = async (updates: any) => {
+    await advanceStage("Site Visit Scheduled", updates);
     setShowSiteVisitModal(false);
   };
 
   // ── Quotation submit ───────────────────────────────────────
-  const buildWhatsAppTemplate = () => {
-    const customer = job.customers?.name || "Customer";
-    const address = svAddress || job.customers?.address || "";
-    const phone = svPhone || job.customers?.phone || "";
-    
-    return `Hello ${customer}, this is Above All Aircon. My engineer ${qEngineer} had a site survey at your mentioned address - ${address} Hp: ${phone}
-
-${qCustomBreakdown}
-
-Installation with Full Upgraded Materials as below:
-${qMaterials}
-
-Warranty
-${qWarranty}
-
-Aircons’ goods are subject to stocks availability.
-
-Terms: 30days. To confirm the installation date, deposit details will be forwarded after confirmation
-
-Hope to hear from you the soonest!`;
-  };
-
-  const handleQuotationSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    // Save quotation details to job
+  const handleQuotationSubmit = async (updates: any, wpText: string) => {
     setLoading(true);
     const { data, error } = await supabase.from("jobs").update({
       stage: "Quotation Sent",
-      ac_brand: qBrand,
-      unit_count: qUnits,
-      service_type: qService,
-      quoted_amount: qAmount,
-      notes: [job.notes, qNotes].filter(Boolean).join("\n---\n"),
+      ...updates,
     }).eq("id", job.id).select().single();
     if (!error && data) {
       setJob({ ...job, ...data });
-      const template = buildWhatsAppTemplate();
-      setWhatsappText(template);
+      setWhatsappText(wpText);
       setShowQuotationModal(false);
       setShowWhatsAppTemplate(true);
     } else if (error) {
@@ -189,15 +105,8 @@ Hope to hear from you the soonest!`;
   };
 
   // ── Confirm Job submit ─────────────────────────────────────
-  const handleConfirmJobSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!cjDate) return;
-    await advanceStage("Job Scheduled", {
-      job_date: cjDate,
-      job_time: cjTime || null,
-      deposit_amount: cjDeposit,
-      deposit_collected: cjCollected,
-    });
+  const handleConfirmJobSubmit = async (updates: any) => {
+    await advanceStage("Job Scheduled", updates);
     setShowConfirmJobModal(false);
   };
 
@@ -279,10 +188,6 @@ Hope to hear from you the soonest!`;
     setLoading(false);
   };
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(whatsappText).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2500); });
-  };
-
   const resolvedStaff = job.assigned_staff || staffProfiles.find((s: any) => s.id === job.assigned_to);
   const staffName = resolvedStaff ? (resolvedStaff.full_name || resolvedStaff.name || resolvedStaff.email) : null;
   const remaining = (Number(job.deposit_amount) || 0) - (Number(job.deposit_collected) || 0);
@@ -305,12 +210,14 @@ Hope to hear from you the soonest!`;
             </h1>
           </div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <button
-              onClick={() => setShowInvoiceModal(true)}
-              style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #10b981, #059669)", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)" }}
-            >
-              📄 Preview & Download Invoice
-            </button>
+            {userRole === "admin" && stageIndex >= STAGES.indexOf("Quotation Sent") && (
+              <button
+                onClick={() => setShowInvoiceModal(true)}
+                style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #10b981, #059669)", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)" }}
+              >
+                📄 Preview & Download Invoice
+              </button>
+            )}
             <button onClick={() => setIsEditing(!isEditing)} style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", fontSize: 14, fontWeight: 600, color: "#475569", cursor: "pointer" }}>
               {isEditing ? "Cancel Edit" : "Edit Details"}
             </button>
@@ -702,112 +609,17 @@ Hope to hear from you the soonest!`;
 
       {/* ══ SITE VISIT MODAL ══ */}
       {showSiteVisitModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20 }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 480, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
-            <div style={{ fontSize: 24, marginBottom: 8 }}>🗓</div>
-            <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 6px 0" }}>Schedule Site Visit</h3>
-            <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 24px 0" }}>Fill in the visit details. Address and phone are pre-filled from the customer record.</p>
-            <form onSubmit={handleSiteVisitSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div className="form-group">
-                  <label className="form-label">Visit Date *</label>
-                  <input type="date" required className="form-input" value={svDate} onChange={(e) => setSvDate(e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Time</label>
-                  <input type="time" className="form-input" value={svTime} onChange={(e) => setSvTime(e.target.value)} />
-                </div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Contact Phone</label>
-                <input className="form-input" placeholder="Customer phone..." value={svPhone} onChange={(e) => setSvPhone(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Address</label>
-                <input className="form-input" placeholder="Visit address..." value={svAddress} onChange={(e) => setSvAddress(e.target.value)} />
-              </div>
-              <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-                <button type="button" onClick={() => setShowSiteVisitModal(false)} style={{ flex: 1, padding: 13, borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#475569" }}>Cancel</button>
-                <button type="submit" disabled={loading} style={{ flex: 2, padding: 13, borderRadius: 10, border: "none", background: "linear-gradient(135deg,#7c3aed,#6d28d9)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                  {loading ? "Scheduling..." : "Schedule & Move to Site Visit"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <SiteVisitModal job={job} loading={loading} onClose={() => setShowSiteVisitModal(false)} onSubmit={handleSiteVisitSubmit} />
       )}
 
       {/* ══ QUOTATION MODAL ══ */}
       {showQuotationModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20 }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
-            <div style={{ fontSize: 24, marginBottom: 8 }}>📋</div>
-            <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 6px 0" }}>Submit Quotation</h3>
-            <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 24px 0" }}>Confirm service details — a WhatsApp template will be generated for you to send to the customer.</p>
-            <form onSubmit={handleQuotationSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ display: "flex", gap: 12 }}>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label className="form-label">Quoted Amount ($) *</label>
-                  <input type="number" step="0.01" required className="form-input" style={{ fontWeight: 700, color: "#2563eb" }} value={qAmount} onChange={(e) => setQAmount(parseFloat(e.target.value) || 0)} />
-                </div>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label className="form-label">Engineer Name</label>
-                  <input className="form-input" placeholder="Jackie" value={qEngineer} onChange={(e) => setQEngineer(e.target.value)} />
-                </div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Quotation Breakdown (Equipment & Pricing)</label>
-                <textarea className="form-input" rows={12} value={qCustomBreakdown} onChange={(e) => setQCustomBreakdown(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Upgraded Materials</label>
-                <textarea className="form-input" rows={5} value={qMaterials} onChange={(e) => setQMaterials(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Warranty Details</label>
-                <textarea className="form-input" rows={3} value={qWarranty} onChange={(e) => setQWarranty(e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Additional Notes (private notes)</label>
-                <textarea className="form-input" rows={2} placeholder="Internal details..." value={qNotes} onChange={(e) => setQNotes(e.target.value)} />
-              </div>
-              <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-                <button type="button" onClick={() => setShowQuotationModal(false)} style={{ flex: 1, padding: 13, borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#475569" }}>Cancel</button>
-                <button type="submit" disabled={loading} style={{ flex: 2, padding: 13, borderRadius: 10, border: "none", background: "linear-gradient(135deg,#d97706,#b45309)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                  {loading ? "Generating..." : "Generate WhatsApp Template →"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <QuotationModal job={job} loading={loading} onClose={() => setShowQuotationModal(false)} onSubmit={handleQuotationSubmit} />
       )}
 
       {/* ══ WHATSAPP TEMPLATE MODAL ══ */}
       {showWhatsAppTemplate && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 400, padding: 20 }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 560, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: "#dcfce7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>💬</div>
-              <div>
-                <h3 style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", margin: 0 }}>WhatsApp Quotation Template</h3>
-                <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0 0" }}>Job moved to "Quotation Sent" ✅</p>
-              </div>
-            </div>
-            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: 20, marginBottom: 20, fontFamily: "monospace", fontSize: 13, color: "#166534", lineHeight: 1.7, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-              {whatsappText}
-            </div>
-            <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={() => setShowWhatsAppTemplate(false)} style={{ flex: 1, padding: 13, borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#475569" }}>Close</button>
-              <button onClick={copyToClipboard} style={{
-                flex: 2, padding: 13, borderRadius: 10, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer",
-                background: copied ? "#059669" : "linear-gradient(135deg,#25d366,#128c7e)", color: "#fff",
-                transition: "background 0.3s"
-              }}>
-                {copied ? "✓ Copied!" : "📋 Copy to Clipboard"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <WhatsAppTemplateModal whatsappText={whatsappText} onClose={() => setShowWhatsAppTemplate(false)} />
       )}
 
       {/* ══ INVOICE MODAL ══ */}
@@ -817,52 +629,7 @@ Hope to hear from you the soonest!`;
 
       {/* ══ CONFIRM JOB MODAL ══ */}
       {showConfirmJobModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20 }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 460, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
-            <div style={{ fontSize: 24, marginBottom: 8 }}>✅</div>
-            <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 6px 0" }}>Confirm Job</h3>
-            <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 24px 0" }}>Enter the confirmed job date and deposit details to proceed.</p>
-            <form onSubmit={handleConfirmJobSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div className="form-group">
-                  <label className="form-label">Job Date *</label>
-                  <input type="date" required className="form-input" value={cjDate} onChange={(e) => setCjDate(e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Job Time</label>
-                  <input type="time" className="form-input" value={cjTime} onChange={(e) => setCjTime(e.target.value)} />
-                </div>
-              </div>
-
-              <div style={{ background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0", padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Deposit Details</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div className="form-group">
-                    <label className="form-label">Deposit Amount ($)</label>
-                    <input type="number" step="0.01" className="form-input" value={cjDeposit} onChange={(e) => setCjDeposit(parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Amount Collected ($)</label>
-                    <input type="number" step="0.01" className="form-input" value={cjCollected} onChange={(e) => setCjCollected(parseFloat(e.target.value) || 0)} />
-                  </div>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#64748b" }}>
-                  <span>Quoted:</span><span style={{ fontWeight: 700, color: "#0f172a" }}>${Number(job.quoted_amount || 0).toFixed(2)}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#64748b" }}>
-                  <span>Remaining after deposit:</span>
-                  <span style={{ fontWeight: 700, color: "#f59e0b" }}>${Math.max(0, Number(job.quoted_amount || 0) - cjCollected).toFixed(2)}</span>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
-                <button type="button" onClick={() => setShowConfirmJobModal(false)} style={{ flex: 1, padding: 13, borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#475569" }}>Cancel</button>
-                <button type="submit" disabled={loading} style={{ flex: 2, padding: 13, borderRadius: 10, border: "none", background: "linear-gradient(135deg,#2563eb,#1d4ed8)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                  {loading ? "Confirming..." : "Confirm & Schedule Job →"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <ConfirmJobModal job={job} loading={loading} onClose={() => setShowConfirmJobModal(false)} onSubmit={handleConfirmJobSubmit} />
       )}
     </>
   );
