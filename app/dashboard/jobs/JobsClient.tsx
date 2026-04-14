@@ -5,7 +5,7 @@ import JobColumn from "./JobColumn";
 import JobListView from "./JobListView";
 import JobModal from "./JobModal";
 import { useRouter } from "next/navigation";
-import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal } from "@/components/StageModals";
+import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal } from "@/components/StageModals";
 import { updateJobStage, deleteJob } from "@/app/actions/jobActions";
 
 export type Job = {
@@ -49,11 +49,11 @@ export type Job = {
 
 
 export const STAGES = [
-  "New Enquiry",
   "Site Visit Scheduled",
   "Quotation Sent",
   "Job Scheduled",
   "First Visit",
+  "Second Visit",
   "Completed",
 ];
 
@@ -100,6 +100,7 @@ export default function JobsClient({
   const [showWhatsAppTemplate, setShowWhatsAppTemplate] = useState(false);
   const [whatsappText, setWhatsappText] = useState("");
   const [showConfirmJobModal, setShowConfirmJobModal] = useState(false);
+  const [showSecondVisitModal, setShowSecondVisitModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -187,6 +188,11 @@ export default function JobsClient({
       setShowConfirmJobModal(true);
       return;
     }
+    if (newStage === "Second Visit") {
+      setPendingJob(job);
+      setShowSecondVisitModal(true);
+      return;
+    }
 
     // Map "First Visit" back to DB value "In Progress" for now
     await advanceStageJobsClient(jobId, newStage, {});
@@ -213,6 +219,13 @@ export default function JobsClient({
     setShowConfirmJobModal(false);
     setPendingJob(null);
     setTargetStage("");
+  };
+
+  const handleSecondVisitSubmit = async (updates: any) => {
+    if (!pendingJob) return;
+    await advanceStageJobsClient(pendingJob.id, "Second Visit", updates);
+    setShowSecondVisitModal(false);
+    setPendingJob(null);
   };
 
 
@@ -406,6 +419,11 @@ export default function JobsClient({
       {/* ══ CONFIRM JOB MODAL ══ */}
       {showConfirmJobModal && pendingJob && (
         <ConfirmJobModal job={pendingJob} loading={actionLoading} onClose={() => setShowConfirmJobModal(false)} onSubmit={handleConfirmJobSubmit} />
+      )}
+
+      {/* ══ SECOND VISIT MODAL ══ */}
+      {showSecondVisitModal && pendingJob && (
+        <SecondVisitModal job={pendingJob} loading={actionLoading} onClose={() => setShowSecondVisitModal(false)} onSubmit={handleSecondVisitSubmit} />
       )}
 
 

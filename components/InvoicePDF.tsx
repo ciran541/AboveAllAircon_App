@@ -238,6 +238,8 @@ export interface InvoiceData {
   depositCollected: number;
   balance: number;
   jobDateStr: string;        // e.g. "March 25th, 2026" or "TBD"
+  isQuotation?: boolean;
+  cvRedeemed?: boolean;
 }
 
 interface InvoicePDFProps {
@@ -279,9 +281,9 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
 
           {/* Right: Invoice title + details */}
           <View style={styles.invoiceBlock}>
-            <Text style={styles.invoiceTitle}>Invoice</Text>
+            <Text style={styles.invoiceTitle}>{data.isQuotation ? 'Quotation' : 'Invoice'}</Text>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Invoice No:</Text>
+              <Text style={styles.detailLabel}>{data.isQuotation ? 'Quotation No:' : 'Invoice No:'}</Text>
               <Text style={styles.detailValue}>{data.invoiceNo}</Text>
             </View>
             <View style={styles.detailRow}>
@@ -431,22 +433,31 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                 <Text style={styles.totalLabelCell}>Total</Text>
                 <Text style={styles.totalValueCell}>S${data.quotedAmount.toFixed(0)}</Text>
               </View>
-              <View style={styles.totalLine}>
-                <Text style={styles.totalLabelCell}>Deposit</Text>
-                <Text style={styles.totalValueCell}>{depositLabel}</Text>
-              </View>
-              <View style={styles.totalLine}>
-                <Text style={[styles.totalLabelCell, styles.balanceBg]}>Balance</Text>
-                <Text style={[styles.totalValueCell, styles.balanceBg]}>
-                  S${data.balance.toFixed(0)}
-                </Text>
-              </View>
+              {!data.isQuotation && (
+                <>
+                  <View style={styles.totalLine}>
+                    <Text style={styles.totalLabelCell}>Deposit</Text>
+                    <Text style={styles.totalValueCell}>{depositLabel}</Text>
+                  </View>
+                  <View style={styles.totalLine}>
+                    <Text style={[styles.totalLabelCell, styles.balanceBg]}>Balance</Text>
+                    <Text style={[styles.totalValueCell, styles.balanceBg]}>
+                      S${data.balance.toFixed(0)}
+                    </Text>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         </View>
 
         {/* ── FOOTER ── */}
         <View style={styles.footer}>
+          {data.cvRedeemed && (
+            <Text style={[styles.footerBold, { marginBottom: 12, color: '#10b981' }]}>
+              CV redeemed (SG Climate Voucher)
+            </Text>
+          )}
           <Text style={[styles.footerBold, { marginBottom: 12 }]}>
             Job will take place and be completed on {data.jobDateStr}
           </Text>

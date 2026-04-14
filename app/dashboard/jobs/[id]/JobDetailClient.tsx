@@ -5,14 +5,14 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import InvoicePreviewModal from "@/components/InvoicePreviewModal";
-import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal } from "@/components/StageModals";
+import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal } from "@/components/StageModals";
 
 const STAGES = [
-  "New Enquiry",
   "Site Visit Scheduled",
   "Quotation Sent",
   "Job Scheduled",
   "First Visit",
+  "Second Visit",
   "Completed",
 ];
 
@@ -46,6 +46,8 @@ export default function JobDetailClient({
   const [showConfirmJobModal, setShowConfirmJobModal] = useState(false);
   const [showWhatsAppTemplate, setShowWhatsAppTemplate] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [documentMode, setDocumentMode] = useState<"invoice" | "quotation">("invoice");
+  const [showSecondVisitModal, setShowSecondVisitModal] = useState(false);
   const [whatsappText, setWhatsappText] = useState("");
 
   // Material management
@@ -110,6 +112,12 @@ export default function JobDetailClient({
     setShowConfirmJobModal(false);
   };
 
+  // ── Second Visit submit ────────────────────────────────────
+  const handleSecondVisitSubmit = async (updates: any) => {
+    await advanceStage("Second Visit", updates);
+    setShowSecondVisitModal(false);
+  };
+
 
   // ── Material management ────────────────────────────────────
   const handleAddMaterial = async () => {
@@ -158,7 +166,6 @@ export default function JobDetailClient({
 
     // Conditionally update restricted inputs
     if (fd.has("quoted_amount")) updates.quoted_amount = parseFloat(fd.get("quoted_amount") as string) || 0;
-    if (fd.has("deposit_amount")) updates.deposit_amount = parseFloat(fd.get("deposit_amount") as string) || 0;
     if (fd.has("deposit_collected")) updates.deposit_collected = parseFloat(fd.get("deposit_collected") as string) || 0;
     
     if (fd.has("assigned_to")) updates.assigned_to = fd.get("assigned_to") || null;
@@ -190,7 +197,7 @@ export default function JobDetailClient({
 
   const resolvedStaff = job.assigned_staff || staffProfiles.find((s: any) => s.id === job.assigned_to);
   const staffName = resolvedStaff ? (resolvedStaff.full_name || resolvedStaff.name || resolvedStaff.email) : null;
-  const remaining = (Number(job.deposit_amount) || 0) - (Number(job.deposit_collected) || 0);
+  const remaining = (Number(job.quoted_amount) || 0) - (Number(job.deposit_collected) || 0);
 
   return (
     <>
@@ -211,12 +218,20 @@ export default function JobDetailClient({
           </div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             {userRole === "admin" && stageIndex >= STAGES.indexOf("Quotation Sent") && (
-              <button
-                onClick={() => setShowInvoiceModal(true)}
-                style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #10b981, #059669)", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)" }}
-              >
-                📄 Preview & Download Invoice
-              </button>
+              <>
+                <button
+                  onClick={() => { setDocumentMode("quotation"); setShowInvoiceModal(true); }}
+                  style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #f59e0b, #d97706)", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 4px 12px rgba(245, 158, 11, 0.3)" }}
+                >
+                  📄 Preview & Download Quotation
+                </button>
+                <button
+                  onClick={() => { setDocumentMode("invoice"); setShowInvoiceModal(true); }}
+                  style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #10b981, #059669)", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)" }}
+                >
+                  📄 Preview & Download Invoice
+                </button>
+              </>
             )}
             <button onClick={() => setIsEditing(!isEditing)} style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", fontSize: 14, fontWeight: 600, color: "#475569", cursor: "pointer" }}>
               {isEditing ? "Cancel Edit" : "Edit Details"}
@@ -279,10 +294,16 @@ export default function JobDetailClient({
               </button>
             )}
             {normalizedStage === "Quotation Sent" && (
-              <button onClick={() => setShowConfirmJobModal(true)} disabled={loading}
-                style={{ padding: "12px 28px", background: "linear-gradient(135deg, #2563eb, #1d4ed8)", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(37,99,235,0.3)" }}>
-                ✅ Confirm Job
-              </button>
+              <div style={{ display: "flex", gap: 12 }}>
+                <button onClick={() => setShowQuotationModal(true)} disabled={loading}
+                  style={{ padding: "12px 28px", background: "linear-gradient(135deg, #14b8a6, #0d9488)", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(20,184,166,0.3)" }}>
+                  📄 Update Quotation
+                </button>
+                <button onClick={() => setShowConfirmJobModal(true)} disabled={loading}
+                  style={{ padding: "12px 28px", background: "linear-gradient(135deg, #2563eb, #1d4ed8)", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(37,99,235,0.3)" }}>
+                  ✅ Confirm Job
+                </button>
+              </div>
             )}
             {normalizedStage === "Job Scheduled" && (
               <button onClick={() => advanceStage("First Visit")} disabled={loading}
@@ -291,8 +312,20 @@ export default function JobDetailClient({
               </button>
             )}
             {normalizedStage === "First Visit" && (
+              <div style={{ display: "flex", gap: 12 }}>
+                <button onClick={() => setShowSecondVisitModal(true)} disabled={loading}
+                  style={{ padding: "12px 28px", background: "linear-gradient(135deg, #059669, #047857)", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(5,150,105,0.3)" }}>
+                  📅 Schedule Second Visit
+                </button>
+                <button onClick={() => advanceStage("Completed")} disabled={loading}
+                  style={{ padding: "12px 28px", background: "linear-gradient(135deg, #10b981, #059669)", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(16,185,129,0.3)" }}>
+                  🏆 Mark as Completed
+                </button>
+              </div>
+            )}
+            {normalizedStage === "Second Visit" && (
               <button onClick={() => advanceStage("Completed")} disabled={loading}
-                style={{ padding: "12px 28px", background: "linear-gradient(135deg, #059669, #047857)", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(5,150,105,0.3)" }}>
+                style={{ padding: "12px 28px", background: "linear-gradient(135deg, #10b981, #059669)", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(16,185,129,0.3)" }}>
                 🏆 Mark as Completed
               </button>
             )}
@@ -445,10 +478,6 @@ export default function JobDetailClient({
                   {isEditing ? <input name="quoted_amount" defaultValue={job.quoted_amount} style={{ width: 90, textAlign: "right" }} className="form-input" /> : <span style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>${Number(job.quoted_amount || 0).toFixed(2)}</span>}
                 </div>
                 <div style={{ height: 1, background: "#e2e8f0" }} />
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 13, color: "#64748b" }}>Deposit Amount</span>
-                  {isEditing ? <input name="deposit_amount" defaultValue={job.deposit_amount || 0} style={{ width: 90, textAlign: "right" }} className="form-input" /> : <span style={{ fontSize: 15, fontWeight: 700, color: "#475569" }}>${Number(job.deposit_amount || 0).toFixed(2)}</span>}
-                </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 13, color: "#64748b" }}>Deposit Collected</span>
                   {isEditing ? <input name="deposit_collected" defaultValue={job.deposit_collected || 0} style={{ width: 90, textAlign: "right" }} className="form-input" /> : <span style={{ fontSize: 15, fontWeight: 700, color: "#059669" }}>${Number(job.deposit_collected || 0).toFixed(2)}</span>}
@@ -624,12 +653,17 @@ export default function JobDetailClient({
 
       {/* ══ INVOICE MODAL ══ */}
       {showInvoiceModal && (
-        <InvoicePreviewModal job={job} onClose={() => setShowInvoiceModal(false)} />
+        <InvoicePreviewModal job={job} onClose={() => setShowInvoiceModal(false)} documentType={documentMode} />
       )}
 
       {/* ══ CONFIRM JOB MODAL ══ */}
       {showConfirmJobModal && (
         <ConfirmJobModal job={job} loading={loading} onClose={() => setShowConfirmJobModal(false)} onSubmit={handleConfirmJobSubmit} />
+      )}
+
+      {/* ══ SECOND VISIT MODAL ══ */}
+      {showSecondVisitModal && (
+        <SecondVisitModal job={job} loading={loading} onClose={() => setShowSecondVisitModal(false)} onSubmit={handleSecondVisitSubmit} />
       )}
     </>
   );

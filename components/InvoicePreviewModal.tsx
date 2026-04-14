@@ -17,15 +17,17 @@ const PDFDownloadLink = dynamic(
 interface InvoicePreviewModalProps {
   job: any;
   onClose: () => void;
+  documentType?: 'invoice' | 'quotation';
 }
 
 // Helper to join array fields for textarea editing
 const arrToText = (arr: string[]) => arr.join('\n');
 const textToArr = (text: string) => text.split('\n').map(s => s.trim()).filter(Boolean);
 
-export default function InvoicePreviewModal({ job, onClose }: InvoicePreviewModalProps) {
+export default function InvoicePreviewModal({ job, onClose, documentType = 'invoice' }: InvoicePreviewModalProps) {
   const [mounted, setMounted] = useState(false);
 
+  const isQuotation = documentType === 'quotation';
   const defaultQuoted = Number(job?.quoted_amount || 0);
   const defaultDeposit = Number(job?.deposit_collected || 0);
 
@@ -74,6 +76,8 @@ export default function InvoicePreviewModal({ job, onClose }: InvoicePreviewModa
     depositCollected: defaultDeposit,
     balance: defaultQuoted - defaultDeposit,
     jobDateStr: job?.job_date ? new Date(job.job_date).toLocaleDateString('en-GB') : 'TBD',
+    isQuotation,
+    cvRedeemed: false,
   });
 
   // ── Textarea mirror state (arrays → editable text) ───────────────────────
@@ -85,9 +89,10 @@ export default function InvoicePreviewModal({ job, onClose }: InvoicePreviewModa
 
   // Generic scalar field handler
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
+    const target = e.target as HTMLInputElement;
+    const { name, value, type, checked } = target;
     setData(prev => {
-      const next = { ...prev, [name]: value } as any;
+      const next = { ...prev, [name]: type === 'checkbox' ? checked : value } as any;
       if (name === 'quotedAmount' || name === 'depositCollected') {
         const q = parseFloat(next.quotedAmount) || 0;
         const d = parseFloat(next.depositCollected) || 0;
@@ -148,14 +153,14 @@ export default function InvoicePreviewModal({ job, onClose }: InvoicePreviewModa
           background: '#f8fafc',
         }}>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a' }}>
-            📄 Preview &amp; Edit Invoice
+            📄 Preview &amp; Edit {isQuotation ? 'Quotation' : 'Invoice'}
           </h2>
           <div style={{ display: 'flex', gap: 12 }}>
             <button onClick={onClose} style={{
               padding: '8px 16px', borderRadius: 8, border: '1px solid #cbd5e1',
               background: '#fff', fontWeight: 600, cursor: 'pointer', color: '#475569',
             }}>Close</button>
-            <PDFDownloadLink document={<InvoicePDF data={data} />} fileName={`Invoice_${data.invoiceNo}.pdf`}>
+            <PDFDownloadLink document={<InvoicePDF data={data} />} fileName={`${isQuotation ? 'Quotation' : 'Invoice'}_${data.invoiceNo}.pdf`}>
               {({ loading }) => (
                 <button disabled={loading} style={{
                   padding: '8px 16px', borderRadius: 8, border: 'none',
@@ -184,7 +189,7 @@ export default function InvoicePreviewModal({ job, onClose }: InvoicePreviewModa
               {/* Row 1 */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={labelStyle}>Invoice No</label>
+                  <label style={labelStyle}>{isQuotation ? 'Quotation No' : 'Invoice No'}</label>
                   <input name="invoiceNo" value={data.invoiceNo} onChange={handleChange} style={inputStyle} />
                 </div>
                 <div>
@@ -257,6 +262,11 @@ export default function InvoicePreviewModal({ job, onClose }: InvoicePreviewModa
                 <textarea value={warrantyText} onChange={handleWarrantyChange} rows={4} style={inputStyle} />
               </div>
 
+              <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input type="checkbox" id="cvRedeemed" name="cvRedeemed" checked={data.cvRedeemed} onChange={handleChange} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                <label htmlFor="cvRedeemed" style={{ ...labelStyle, marginBottom: 0, cursor: 'pointer' }}>Apply SG Climate Voucher (CV Redeemed)</label>
+              </div>
+
               {divider}
               <h3 style={sectionHeadStyle}>Financials</h3>
 
@@ -265,14 +275,18 @@ export default function InvoicePreviewModal({ job, onClose }: InvoicePreviewModa
                   <label style={labelStyle}>Total Amount ($)</label>
                   <input name="quotedAmount" type="number" value={data.quotedAmount} onChange={handleChange} style={inputStyle} />
                 </div>
-                <div>
-                  <label style={labelStyle}>Deposit Collected ($)</label>
-                  <input name="depositCollected" type="number" value={data.depositCollected} onChange={handleChange} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Balance ($)</label>
-                  <input value={data.balance} readOnly style={{ ...inputStyle, background: '#f1fdf7', color: '#059669', fontWeight: 700 }} />
-                </div>
+                {!isQuotation && (
+                  <>
+                    <div>
+                      <label style={labelStyle}>Deposit Collected ($)</label>
+                      <input name="depositCollected" type="number" value={data.depositCollected} onChange={handleChange} style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Balance ($)</label>
+                      <input value={data.balance} readOnly style={{ ...inputStyle, background: '#f1fdf7', color: '#059669', fontWeight: 700 }} />
+                    </div>
+                  </>
+                )}
               </div>
 
             </div>

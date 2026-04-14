@@ -28,7 +28,7 @@ export default function JobModal({
 
   const [formData, setFormData] = useState<Partial<Job>>(
     job || {
-      stage: "New Enquiry",
+      stage: "Site Visit Scheduled",
       customer_id: "",
       service_type: "Installation",
       ac_brand: "",
@@ -42,7 +42,8 @@ export default function JobModal({
       priority: "Medium",
       source: "Other",
       status: "open",
-    },
+      visit_time: "",
+    }
   );
 
   const [loading, setLoading] = useState(false);
@@ -117,6 +118,7 @@ export default function JobModal({
 
     if (!dataToSave.visit_date) dataToSave.visit_date = null;
     if (!dataToSave.job_date) dataToSave.job_date = null;
+    if (!dataToSave.visit_time) dataToSave.visit_time = null;
     if (!dataToSave.assigned_to) dataToSave.assigned_to = null;
     if (!dataToSave.unit_count) dataToSave.unit_count = 1;
     if (!dataToSave.quoted_amount) dataToSave.quoted_amount = 0;
@@ -259,6 +261,8 @@ export default function JobModal({
                   <label className="form-label">Number of Units</label>
                   <input type="number" className="form-input" min={1} value={formData.unit_count || 1} onChange={(e) => setFormData({ ...formData, unit_count: parseInt(e.target.value) || 1 })} />
                 </div>
+                {/* Priority, Assignment, and Financials are currently hidden per request */}
+                {/* 
                 <div className="form-group">
                   <label className="form-label">Priority</label>
                   <select className="form-input" value={formData.priority || "Medium"} onChange={(e) => setFormData({ ...formData, priority: e.target.value })}>
@@ -268,10 +272,27 @@ export default function JobModal({
                     <option value="Urgent">Urgent</option>
                   </select>
                 </div>
+                */}
               </div>
             </div>
 
-            {/* ── Assignment ── */}
+            {/* ── Visit Schedule ── */}
+            <div style={{ padding: "24px", background: "#f8fafc", borderRadius: 20, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 16 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>Visit Schedule</label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div className="form-group">
+                  <label className="form-label">Visit Date</label>
+                  <input type="date" className="form-input" value={formData.visit_date || ""} onChange={(e) => setFormData({ ...formData, visit_date: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Visit Time</label>
+                  <input type="time" className="form-input" value={formData.visit_time || ""} onChange={(e) => setFormData({ ...formData, visit_time: e.target.value })} />
+                </div>
+              </div>
+            </div>
+
+            {/* ── Assignment & Financials (Hidden) ── */}
+            {/*
             <div style={{ padding: "24px", background: "#f8fafc", borderRadius: 20, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 16 }}>
               <label style={{ fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>Assignment & Financials</label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
@@ -290,6 +311,7 @@ export default function JobModal({
                 </div>
               </div>
             </div>
+            */}
 
             {/* ── Notes ── */}
             <div className="form-group">

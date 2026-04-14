@@ -226,7 +226,6 @@ export function ConfirmJobModal({
 }) {
   const [cjDate, setCjDate] = useState(job?.job_date || "");
   const [cjTime, setCjTime] = useState(job?.job_time || "");
-  const [cjDeposit, setCjDeposit] = useState(job?.deposit_amount || 0);
   const [cjCollected, setCjCollected] = useState(job?.deposit_collected || 0);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -235,7 +234,6 @@ export function ConfirmJobModal({
     onSubmit({
       job_date: cjDate,
       job_time: cjTime || null,
-      deposit_amount: cjDeposit,
       deposit_collected: cjCollected,
     });
   };
@@ -260,21 +258,15 @@ export function ConfirmJobModal({
 
           <div style={{ background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0", padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Deposit Details</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div className="form-group">
-                <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Deposit Amount ($)</label>
-                <input type="number" step="0.01" className="form-input" style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: "8px" }} value={cjDeposit} onChange={(e) => setCjDeposit(parseFloat(e.target.value) || 0)} />
-              </div>
-              <div className="form-group">
-                <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Amount Collected ($)</label>
-                <input type="number" step="0.01" className="form-input" style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: "8px" }} value={cjCollected} onChange={(e) => setCjCollected(parseFloat(e.target.value) || 0)} />
-              </div>
+            <div className="form-group">
+              <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Deposit Collected ($)</label>
+              <input type="number" step="0.01" className="form-input" style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: "8px" }} value={cjCollected} onChange={(e) => setCjCollected(parseFloat(e.target.value) || 0)} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#64748b" }}>
-              <span>Quoted:</span><span style={{ fontWeight: 700, color: "#0f172a" }}>${Number(job?.quoted_amount || 0).toFixed(2)}</span>
+              <span>Quoted Amount:</span><span style={{ fontWeight: 700, color: "#0f172a" }}>${Number(job?.quoted_amount || 0).toFixed(2)}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#64748b" }}>
-              <span>Remaining after deposit:</span>
+              <span>Remaining Balance:</span>
               <span style={{ fontWeight: 700, color: "#f59e0b" }}>${Math.max(0, Number(job?.quoted_amount || 0) - cjCollected).toFixed(2)}</span>
             </div>
           </div>
@@ -282,6 +274,59 @@ export function ConfirmJobModal({
             <button type="button" onClick={onClose} style={{ flex: 1, padding: 13, borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#475569" }}>Cancel</button>
             <button type="submit" disabled={loading} style={{ flex: 2, padding: 13, borderRadius: 10, border: "none", background: "linear-gradient(135deg,#2563eb,#1d4ed8)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
               {loading ? "Confirming..." : "Confirm & Schedule Job →"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── SECOND VISIT MODAL ────────────────────────────────────────────────────────
+export function SecondVisitModal({
+  job,
+  onClose,
+  onSubmit,
+  loading,
+}: {
+  job: any;
+  onClose: () => void;
+  onSubmit: (data: any) => void;
+  loading: boolean;
+}) {
+  const [svDate, setSvDate] = useState(job?.second_visit_date || "");
+  const [svTime, setSvTime] = useState(job?.second_visit_time || "");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!svDate) return;
+    onSubmit({
+      second_visit_date: svDate,
+      second_visit_time: svTime || null,
+    });
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300, padding: 20 }}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 460, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
+        <div style={{ fontSize: 24, marginBottom: 8 }}>📅</div>
+        <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 6px 0" }}>Schedule Second Visit</h3>
+        <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 24px 0" }}>Enter the confirmed date and time for the second visit callback.</p>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="form-group">
+              <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Visit Date *</label>
+              <input type="date" required className="form-input" style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: "8px" }} value={svDate} onChange={(e) => setSvDate(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Visit Time</label>
+              <input type="time" className="form-input" style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: "8px" }} value={svTime} onChange={(e) => setSvTime(e.target.value)} />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+            <button type="button" onClick={onClose} style={{ flex: 1, padding: 13, borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#475569" }}>Cancel</button>
+            <button type="submit" disabled={loading} style={{ flex: 2, padding: 13, borderRadius: 10, border: "none", background: "linear-gradient(135deg,#059669,#047857)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+              {loading ? "Confirming..." : "Schedule Second Visit →"}
             </button>
           </div>
         </form>
