@@ -501,19 +501,6 @@ export function CompleteJobModal({
             </span>
           </div>
 
-          <div className="form-group">
-            <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Payment Status</label>
-            <select
-              className="form-input"
-              style={{ width: "100%", padding: "10px 12px", border: "2px solid #e2e8f0", borderRadius: "10px", fontSize: 14, fontWeight: 600 }}
-              value={paymentStatus}
-              onChange={(e) => setPaymentStatus(e.target.value)}
-            >
-              <option value="Pending">Pending</option>
-              <option value="Paid">Paid</option>
-            </select>
-          </div>
-
           <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
             <button type="button" onClick={onClose} style={{ flex: 1, padding: 13, borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#475569" }}>Cancel</button>
             <button type="submit" disabled={loading} style={{ flex: 2, padding: 13, borderRadius: 10, border: "none", background: "linear-gradient(135deg,#059669,#047857)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
