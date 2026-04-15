@@ -384,28 +384,36 @@ export function CompleteJobModal({
   const depositCollected = Number(job?.deposit_collected || 0);
   const cvAmount = Number(job?.cv_amount || 0);
   const cvRedeemed = Boolean(job?.cv_redeemed);
+  const prevBalanceCollected = Number(job?.final_payment_collected || 0);
 
   // Balance = Total - Deposit only. CV is display only, NOT in calculation.
   const outstandingBalance = Math.max(0, quotedAmount - depositCollected);
 
-  const [balanceCollected, setBalanceCollected] = useState<number>(
-    job?.final_payment_collected ?? outstandingBalance
+  // Default new collection to the remaining balance if final completion, otherwise 0
+  const [newCollection, setNewCollection] = useState<number>(
+    isFinalCompletion ? Math.max(0, outstandingBalance - prevBalanceCollected) : 0
   );
+
+  const totalBalanceCollected = prevBalanceCollected + newCollection;
+  const remaining = Math.max(0, outstandingBalance - totalBalanceCollected);
+
   const [paymentStatus, setPaymentStatus] = useState<string>(
-    job?.payment_status || "Pending"
+    remaining <= 0 ? "Paid" : "Pending"
   );
 
-  const remaining = Math.max(0, outstandingBalance - balanceCollected);
-
-  const handleBalanceChange = (val: number) => {
-    setBalanceCollected(val);
-    setPaymentStatus(val >= outstandingBalance ? "Paid" : "Pending");
+  const handleNewCollectionChange = (val: number) => {
+    setNewCollection(val);
+    if (prevBalanceCollected + val >= outstandingBalance) {
+      setPaymentStatus("Paid");
+    } else {
+      setPaymentStatus("Pending");
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const updates: any = {
-      final_payment_collected: balanceCollected,
+      final_payment_collected: totalBalanceCollected,
       payment_status: paymentStatus,
     };
     if (paymentStatus === "Paid" && job?.payment_status !== "Paid") {
@@ -445,19 +453,28 @@ export function CompleteJobModal({
 
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#64748b" }}>
               <span>Deposit Collected:</span>
-              <span style={{ fontWeight: 700, color: "#059669" }}>- ${depositCollected.toFixed(2)}</span>
+              <span style={{ fontWeight: 700, color: "#64748b" }}>- ${depositCollected.toFixed(2)}</span>
             </div>
+
+            {prevBalanceCollected > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#64748b" }}>
+                <span>Previously Paid Balance:</span>
+                <span style={{ fontWeight: 700, color: "#64748b" }}>- ${prevBalanceCollected.toFixed(2)}</span>
+              </div>
+            )}
 
             <div style={{ height: 1, background: "#e2e8f0" }} />
 
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
-              <span style={{ fontWeight: 700, color: "#0f172a" }}>Outstanding Balance:</span>
-              <span style={{ fontWeight: 800, color: "#f59e0b" }}>${outstandingBalance.toFixed(2)}</span>
+              <span style={{ fontWeight: 700, color: "#0f172a" }}>Remaining Outstanding:</span>
+              <span style={{ fontWeight: 800, color: "#f59e0b" }}>${Math.max(0, outstandingBalance - prevBalanceCollected).toFixed(2)}</span>
             </div>
           </div>
 
           <div className="form-group" style={{ marginTop: 8 }}>
-            <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Balance Collected ($)</label>
+            <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>
+              {isFinalCompletion ? "Collect Final Payment ($)" : "Current Payment Collection ($)"}
+            </label>
             <input
               type="number"
               step="0.01"
@@ -465,8 +482,8 @@ export function CompleteJobModal({
               required
               className="form-input"
               style={{ width: "100%", padding: "12px", border: "2px solid #bfdbfe", borderRadius: "10px", fontSize: 16, fontWeight: 700, color: "#2563eb" }}
-              value={balanceCollected}
-              onChange={(e) => handleBalanceChange(parseFloat(e.target.value) || 0)}
+              value={newCollection}
+              onChange={(e) => handleNewCollectionChange(parseFloat(e.target.value) || 0)}
             />
           </div>
 
