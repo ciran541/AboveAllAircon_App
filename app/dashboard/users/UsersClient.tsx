@@ -135,7 +135,6 @@ function CreateUserModal({
 
   return (
     <div
-      onClick={onClose}
       style={{
         position: 'fixed', inset: 0,
         background: 'rgba(17,24,39,0.45)',

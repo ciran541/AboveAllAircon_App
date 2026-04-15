@@ -44,6 +44,7 @@ const STAGE_THEMES: Record<string, { bg: string; color: string; border: string }
   "Quotation Sent":       { bg: "#fffbeb", color: "#d97706", border: "#fcd34d" },
   "Job Scheduled":        { bg: "#eff6ff", color: "#2563eb", border: "#93c5fd" },
   "First Visit":          { bg: "#fff7ed", color: "#ea580c", border: "#fdba74" },
+  "Job Done (Payment Pending)": { bg: "#f0fdf4", color: "#16a34a", border: "#bbf7d0" },
   "Completed":            { bg: "#ecfdf5", color: "#059669", border: "#6ee7b7" },
 };
 

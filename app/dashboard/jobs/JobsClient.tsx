@@ -5,7 +5,7 @@ import JobColumn from "./JobColumn";
 import JobListView from "./JobListView";
 import JobModal from "./JobModal";
 import { useRouter } from "next/navigation";
-import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal } from "@/components/StageModals";
+import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal, CompleteJobModal } from "@/components/StageModals";
 import { updateJobStage, deleteJob } from "@/app/actions/jobActions";
 
 export type Job = {
@@ -45,6 +45,13 @@ export type Job = {
   created_at: string;
   deposit_amount?: number;
   deposit_collected?: number;
+  cv_redeemed?: boolean;
+  cv_amount?: number;
+  final_payment_collected?: number;
+  quotation_breakdown?: string | null;
+  quotation_materials?: string | null;
+  quotation_warranty?: string | null;
+  engineer_name?: string | null;
 };
 
 
@@ -54,6 +61,7 @@ export const STAGES = [
   "Job Scheduled",
   "First Visit",
   "Second Visit",
+  "Job Done (Payment Pending)",
   "Completed",
 ];
 
@@ -101,6 +109,7 @@ export default function JobsClient({
   const [whatsappText, setWhatsappText] = useState("");
   const [showConfirmJobModal, setShowConfirmJobModal] = useState(false);
   const [showSecondVisitModal, setShowSecondVisitModal] = useState(false);
+  const [showCompleteJobModal, setShowCompleteJobModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -193,6 +202,12 @@ export default function JobsClient({
       setShowSecondVisitModal(true);
       return;
     }
+    if (newStage === "Job Done (Payment Pending)" || newStage === "Completed") {
+      setPendingJob(job);
+      setTargetStage(newStage);
+      setShowCompleteJobModal(true);
+      return;
+    }
 
     // Map "First Visit" back to DB value "In Progress" for now
     await advanceStageJobsClient(jobId, newStage, {});
@@ -226,6 +241,21 @@ export default function JobsClient({
     await advanceStageJobsClient(pendingJob.id, "Second Visit", updates);
     setShowSecondVisitModal(false);
     setPendingJob(null);
+  };
+
+  const handleCompleteJobSubmit = async (updates: any) => {
+    if (!pendingJob) return;
+    
+    // Automatically move to "Completed" if user marked it as "Paid"
+    let finalStage = targetStage || "Job Done (Payment Pending)";
+    if (updates.payment_status === "Paid") {
+      finalStage = "Completed";
+    }
+
+    await advanceStageJobsClient(pendingJob.id, finalStage, updates);
+    setShowCompleteJobModal(false);
+    setPendingJob(null);
+    setTargetStage("");
   };
 
 
@@ -424,6 +454,11 @@ export default function JobsClient({
       {/* ══ SECOND VISIT MODAL ══ */}
       {showSecondVisitModal && pendingJob && (
         <SecondVisitModal job={pendingJob} loading={actionLoading} onClose={() => setShowSecondVisitModal(false)} onSubmit={handleSecondVisitSubmit} />
+      )}
+
+      {/* ══ COMPLETE JOB MODAL ══ */}
+      {showCompleteJobModal && pendingJob && (
+        <CompleteJobModal job={pendingJob} loading={actionLoading} targetStage={targetStage} onClose={() => setShowCompleteJobModal(false)} onSubmit={handleCompleteJobSubmit} />
       )}
 
 

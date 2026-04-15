@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import InvoicePDF, { InvoiceData } from './InvoicePDF';
+import { saveJob } from '@/app/actions/jobActions';
+import { useRouter } from 'next/navigation';
 
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then(mod => mod.PDFViewer),
@@ -18,18 +20,21 @@ interface InvoicePreviewModalProps {
   job: any;
   onClose: () => void;
   documentType?: 'invoice' | 'quotation';
+  onUpdateJob?: (updates: any) => void;
 }
 
 // Helper to join array fields for textarea editing
 const arrToText = (arr: string[]) => arr.join('\n');
 const textToArr = (text: string) => text.split('\n').map(s => s.trim()).filter(Boolean);
 
-export default function InvoicePreviewModal({ job, onClose, documentType = 'invoice' }: InvoicePreviewModalProps) {
+export default function InvoicePreviewModal({ job, onClose, documentType = 'invoice', onUpdateJob }: InvoicePreviewModalProps) {
   const [mounted, setMounted] = useState(false);
+  const router = useRouter();
 
   const isQuotation = documentType === 'quotation';
   const defaultQuoted = Number(job?.quoted_amount || 0);
-  const defaultDeposit = Number(job?.deposit_collected || 0);
+  const existingDeposit = Number(job?.deposit_collected || 0);
+  const defaultDeposit = (isQuotation && existingDeposit === 0) ? defaultQuoted * 0.4 : existingDeposit;
 
   // ── Structured PDF data ──────────────────────────────────────────────────
   const [data, setData] = useState<InvoiceData>({
@@ -41,7 +46,7 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
       return `AA${day}${month}${min}`;
     })(),
     dateStr: job?.created_at ? new Date(job.created_at).toLocaleDateString('en-GB') : '',
-    attnBy: job?.assigned_staff?.full_name || job?.assigned_staff?.name || 'Jackie',
+    attnBy: job?.engineer_name || job?.assigned_staff?.full_name || job?.assigned_staff?.name || 'Jackie',
     customerName: job?.customers?.name || '',
     customerAddress: job?.customers?.address || '-',
     customerPhone: job?.customers?.phone || '-',
@@ -50,34 +55,41 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
     supplyDesc: `Supply 1 set of ${job?.ac_brand || 'Aircon'} system ${job?.unit_count || 1}`,
     brandHeading: `${job?.ac_brand || 'Mitsubishi'} Starmex R32 5Ticks`,
 
-    units: [
-      'MXY4H33VG (Outdoor Unit)',
-      'MSXYFP24VG (Indoor Unit)',
-      'MSXYFP13VG (Indoor Unit)',
-      'MSXYFP10VG x 2 (Indoor Unit)',
-      '24k, 12k, 9k, 9k BTU',
-    ],
+    units: job?.quotation_breakdown
+      ? textToArr(job.quotation_breakdown)
+      : [
+          'MXY4H33VG (Outdoor Unit)',
+          'MSXYFP24VG (Indoor Unit)',
+          'MSXYFP13VG (Indoor Unit)',
+          'MSXYFP10VG x 2 (Indoor Unit)',
+          '24k, 12k, 9k, 9k BTU',
+        ],
     systemLabel: `System ${job?.unit_count || 4}`,
 
-    materials: [
-      '22swg copper pipings',
-      'Keystone cables 3c40/3c70 (local brand)',
-      '1/2 inch class 0 kflex',
-      '16mm drainage pipe with insulation',
-      'DNE TRUNKINGS',
-    ],
-    warranty: [
-      '5 years compressor by Mitsubishi',
-      '1 year fan coil by Mitsubishi',
-      '3 years workmanship for the new pippings work',
-    ],
+    materials: job?.quotation_materials
+      ? textToArr(job.quotation_materials)
+      : [
+          '22swg copper pipings',
+          'Keystone cables 3c40/3c70 (local brand)',
+          '1/2 inch class 0 kflex',
+          '16mm drainage pipe with insulation',
+          'DNE TRUNKINGS',
+        ],
+    warranty: job?.quotation_warranty
+      ? textToArr(job.quotation_warranty)
+      : [
+          '5 years compressor by Mitsubishi',
+          '1 year fan coil by Mitsubishi',
+          '3 years workmanship for the new pippings work',
+        ],
 
     quotedAmount: defaultQuoted,
     depositCollected: defaultDeposit,
     balance: defaultQuoted - defaultDeposit,
     jobDateStr: job?.job_date ? new Date(job.job_date).toLocaleDateString('en-GB') : 'TBD',
     isQuotation,
-    cvRedeemed: false,
+    cvRedeemed: job?.cv_redeemed || false,
+    cvAmount: Number(job?.cv_amount || 300),
   });
 
   // ── Textarea mirror state (arrays → editable text) ───────────────────────
@@ -93,11 +105,13 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
     const { name, value, type, checked } = target;
     setData(prev => {
       const next = { ...prev, [name]: type === 'checkbox' ? checked : value } as any;
-      if (name === 'quotedAmount' || name === 'depositCollected') {
+      if (name === 'quotedAmount' || name === 'depositCollected' || name === 'cvAmount') {
         const q = parseFloat(next.quotedAmount) || 0;
         const d = parseFloat(next.depositCollected) || 0;
+        const c = parseFloat(next.cvAmount) || 0;
         next.quotedAmount = q;
         next.depositCollected = d;
+        next.cvAmount = c;
         next.balance = q - d;
       }
       return next as InvoiceData;
@@ -116,6 +130,58 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
   const handleWarrantyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setWarrantyText(e.target.value);
     setData(prev => ({ ...prev, warranty: textToArr(e.target.value) }));
+  };
+
+  // ── Instant Sync (Local) ──
+  // Push changes back to parent state immediately as user types
+  useEffect(() => {
+    if (!mounted || !onUpdateJob) return;
+    onUpdateJob({
+      quoted_amount: data.quotedAmount,
+      deposit_collected: data.depositCollected,
+      cv_redeemed: data.cvRedeemed,
+      cv_amount: data.cvAmount,
+      quotation_breakdown: arrToText(data.units),
+      quotation_materials: arrToText(data.materials),
+      quotation_warranty: arrToText(data.warranty),
+      engineer_name: data.attnBy,
+    });
+  }, [data.quotedAmount, data.depositCollected, data.cvRedeemed, data.cvAmount, data.units, data.materials, data.warranty, data.attnBy, mounted]);
+
+  // ── Background Auto-Save (DB) ──
+  // Throttled DB persistence (1.5s delay)
+  useEffect(() => {
+    if (!mounted) return;
+    const timer = setTimeout(() => {
+      saveJob({
+        id: job.id,
+        quoted_amount: data.quotedAmount,
+        deposit_collected: data.depositCollected,
+        cv_redeemed: data.cvRedeemed,
+        cv_amount: data.cvAmount,
+        quotation_breakdown: arrToText(data.units),
+        quotation_materials: arrToText(data.materials),
+        quotation_warranty: arrToText(data.warranty),
+        engineer_name: data.attnBy,
+      }).catch(err => console.error("Auto-save error:", err));
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [data.quotedAmount, data.depositCollected, data.cvRedeemed, data.cvAmount, data.units, data.materials, data.warranty, data.attnBy, job.id, mounted]);
+
+  const handleClose = () => {
+    // Final flush on close to ensure latest stats are captured without debounce delay
+    saveJob({
+      id: job.id,
+      quoted_amount: data.quotedAmount,
+      deposit_collected: data.depositCollected,
+      cv_redeemed: data.cvRedeemed,
+      cv_amount: data.cvAmount,
+      quotation_breakdown: arrToText(data.units),
+      quotation_materials: arrToText(data.materials),
+      quotation_warranty: arrToText(data.warranty),
+      engineer_name: data.attnBy,
+    }).then(() => router.refresh());
+    onClose();
   };
 
   if (!mounted) return null;
@@ -156,7 +222,7 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
             📄 Preview &amp; Edit {isQuotation ? 'Quotation' : 'Invoice'}
           </h2>
           <div style={{ display: 'flex', gap: 12 }}>
-            <button onClick={onClose} style={{
+            <button onClick={handleClose} style={{
               padding: '8px 16px', borderRadius: 8, border: '1px solid #cbd5e1',
               background: '#fff', fontWeight: 600, cursor: 'pointer', color: '#475569',
             }}>Close</button>
@@ -204,10 +270,12 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
                   <label style={labelStyle}>Attn By (Staff)</label>
                   <input name="attnBy" value={data.attnBy} onChange={handleChange} style={inputStyle} />
                 </div>
-                <div>
-                  <label style={labelStyle}>Job Date</label>
-                  <input name="jobDateStr" value={data.jobDateStr} onChange={handleChange} style={inputStyle} />
-                </div>
+                {!isQuotation && (
+                  <div>
+                    <label style={labelStyle}>Job Date</label>
+                    <input name="jobDateStr" value={data.jobDateStr} onChange={handleChange} style={inputStyle} />
+                  </div>
+                )}
               </div>
 
               {divider}
@@ -267,6 +335,13 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
                 <label htmlFor="cvRedeemed" style={{ ...labelStyle, marginBottom: 0, cursor: 'pointer' }}>Apply SG Climate Voucher (CV Redeemed)</label>
               </div>
 
+              {data.cvRedeemed && (
+                <div style={{ marginTop: 12 }}>
+                  <label style={labelStyle}>CV Amount ($)</label>
+                  <input name="cvAmount" type="number" value={data.cvAmount} onChange={handleChange} style={inputStyle} />
+                </div>
+              )}
+
               {divider}
               <h3 style={sectionHeadStyle}>Financials</h3>
 
@@ -275,18 +350,14 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
                   <label style={labelStyle}>Total Amount ($)</label>
                   <input name="quotedAmount" type="number" value={data.quotedAmount} onChange={handleChange} style={inputStyle} />
                 </div>
-                {!isQuotation && (
-                  <>
-                    <div>
-                      <label style={labelStyle}>Deposit Collected ($)</label>
-                      <input name="depositCollected" type="number" value={data.depositCollected} onChange={handleChange} style={inputStyle} />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Balance ($)</label>
-                      <input value={data.balance} readOnly style={{ ...inputStyle, background: '#f1fdf7', color: '#059669', fontWeight: 700 }} />
-                    </div>
-                  </>
-                )}
+                <div>
+                  <label style={labelStyle}>{isQuotation ? 'Deposit ($)' : 'Deposit Collected ($)'}</label>
+                  <input name="depositCollected" type="number" value={data.depositCollected} onChange={handleChange} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Balance ($)</label>
+                  <input value={data.balance} readOnly style={{ ...inputStyle, background: '#f1fdf7', color: '#059669', fontWeight: 700 }} />
+                </div>
               </div>
 
             </div>

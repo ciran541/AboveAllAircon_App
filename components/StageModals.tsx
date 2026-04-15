@@ -83,10 +83,34 @@ export function QuotationModal({
   const [qService, setQService] = useState(job?.service_type || "");
   const [qAmount, setQAmount] = useState(job?.quoted_amount || 0);
   const [qNotes, setQNotes] = useState("");
-  const [qEngineer, setQEngineer] = useState("Jackie");
-  const [qCustomBreakdown, setQCustomBreakdown] = useState(`Mitsubishi Starmex R32 4Ticks\n\nMUYGP24VF2 (Outdoor Unit)\nMSYGP24VF (Indoor Unit)\n24k BTU - $2030nett\nSystem 1\n\nMitsubishi Starmex R32 5Ticks\n\nMXY2H20VF (Outdoor Unit)\nMSXYFP13VG x 2 (Indoor Unit)\n12k, 12k BTU - $2360nett\nSystem 2 \n\nA water pump is required - $200nett\n\nx2 stainless-steel brackets - $300nett ($150/each)\n\n Total: $4890nett`);
-  const [qMaterials, setQMaterials] = useState(`✔22g copper pipings\n✔Keystone cables 3c40/3c70 (local brand)\n✔1/2 inch class 0 kflex\n✔16mm drainage pipe with insulation\n✔DNE TRUNKINGS`);
-  const [qWarranty, setQWarranty] = useState(`✔ 5 years compressor by Mitsubishi\n✔ 1 year fan coil by Mitsubishi\n✔ 3 years workmanship for the new pipings work`);
+  const [qEngineer, setQEngineer] = useState(job?.engineer_name || "Jackie");
+  const [qCustomBreakdown, setQCustomBreakdown] = useState(job?.quotation_breakdown || `Mitsubishi Starmex R32 4Ticks
+
+MUYGP24VF2 (Outdoor Unit)
+MSYGP24VF (Indoor Unit)
+24k BTU - $2030nett
+System 1
+
+Mitsubishi Starmex R32 5Ticks
+
+MXY2H20VF (Outdoor Unit)
+MSXYFP13VG x 2 (Indoor Unit)
+12k, 12k BTU - $2360nett
+System 2 
+
+A water pump is required - $200nett
+
+x2 stainless-steel brackets - $300nett ($150/each)
+
+ Total: $4890nett`);
+  const [qMaterials, setQMaterials] = useState(job?.quotation_materials || `✔22g copper pipings
+✔Keystone cables 3c40/3c70 (local brand)
+✔1/2 inch class 0 kflex
+✔16mm drainage pipe with insulation
+✔DNE TRUNKINGS`);
+  const [qWarranty, setQWarranty] = useState(job?.quotation_warranty || `✔ 5 years compressor by Mitsubishi
+✔ 1 year fan coil by Mitsubishi
+✔ 3 years workmanship for the new pipings work`);
 
   const buildWhatsAppTemplate = () => {
     const customer = job?.customers?.name || "Customer";
@@ -118,6 +142,10 @@ Hope to hear from you the soonest!`;
       unit_count: qUnits,
       service_type: qService,
       quoted_amount: qAmount,
+      quotation_breakdown: qCustomBreakdown,
+      quotation_materials: qMaterials,
+      quotation_warranty: qWarranty,
+      engineer_name: qEngineer,
       notes: qNotes ? [job?.notes, qNotes].filter(Boolean).join("\n---\n") : job?.notes,
     }, whatsappText);
   };
@@ -262,6 +290,8 @@ export function ConfirmJobModal({
               <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Deposit Collected ($)</label>
               <input type="number" step="0.01" className="form-input" style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: "8px" }} value={cjCollected} onChange={(e) => setCjCollected(parseFloat(e.target.value) || 0)} />
             </div>
+
+            <div style={{ height: 1, background: "#e2e8f0", margin: "4px 0" }} />
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#64748b" }}>
               <span>Quoted Amount:</span><span style={{ fontWeight: 700, color: "#0f172a" }}>${Number(job?.quoted_amount || 0).toFixed(2)}</span>
             </div>
@@ -327,6 +357,150 @@ export function SecondVisitModal({
             <button type="button" onClick={onClose} style={{ flex: 1, padding: 13, borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#475569" }}>Cancel</button>
             <button type="submit" disabled={loading} style={{ flex: 2, padding: 13, borderRadius: 10, border: "none", background: "linear-gradient(135deg,#059669,#047857)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
               {loading ? "Confirming..." : "Schedule Second Visit →"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── COMPLETE JOB MODAL ────────────────────────────────────────────────────────
+export function CompleteJobModal({
+  job,
+  onClose,
+  onSubmit,
+  loading,
+  targetStage,
+}: {
+  job: any;
+  onClose: () => void;
+  onSubmit: (data: any) => void;
+  loading: boolean;
+  targetStage?: string;
+}) {
+  const isFinalCompletion = targetStage === "Completed";
+  const quotedAmount = Number(job?.quoted_amount || 0);
+  const depositCollected = Number(job?.deposit_collected || 0);
+  const cvAmount = Number(job?.cv_amount || 0);
+  const cvRedeemed = Boolean(job?.cv_redeemed);
+
+  // Balance = Total - Deposit only. CV is display only, NOT in calculation.
+  const outstandingBalance = Math.max(0, quotedAmount - depositCollected);
+
+  const [balanceCollected, setBalanceCollected] = useState<number>(
+    job?.final_payment_collected ?? outstandingBalance
+  );
+  const [paymentStatus, setPaymentStatus] = useState<string>(
+    job?.payment_status || "Pending"
+  );
+
+  const remaining = Math.max(0, outstandingBalance - balanceCollected);
+
+  const handleBalanceChange = (val: number) => {
+    setBalanceCollected(val);
+    setPaymentStatus(val >= outstandingBalance ? "Paid" : "Pending");
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const updates: any = {
+      final_payment_collected: balanceCollected,
+      payment_status: paymentStatus,
+    };
+    if (paymentStatus === "Paid" && job?.payment_status !== "Paid") {
+      updates.payment_collected_at = new Date().toISOString();
+    }
+    onSubmit(updates);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300, padding: 20 }}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 460, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
+        <div style={{ fontSize: 24, marginBottom: 8 }}>{isFinalCompletion ? "🏆" : "💰"}</div>
+        <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 6px 0" }}>
+          {isFinalCompletion ? "Finalize Completion" : "Review Financials"}
+        </h3>
+        <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 24px 0" }}>
+          {isFinalCompletion 
+            ? "Confirm that all payments have been received to fully complete this job."
+            : "Please review the final payment for this job before marking it as job done."}
+        </p>
+        
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* ... (financial summary code remains) ... */}
+          <div style={{ background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Financial Summary</div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#64748b" }}>
+              <span>Total Quoted:</span><span style={{ fontWeight: 700, color: "#0f172a" }}>${quotedAmount.toFixed(2)}</span>
+            </div>
+
+            {cvRedeemed && cvAmount > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#10b981", background: "#f0fdf4", padding: "6px 10px", borderRadius: 8, border: "1px solid #bbf7d0" }}>
+                <span>🏷 CV Redeemed (info only):</span>
+                <span style={{ fontWeight: 700 }}>${cvAmount.toFixed(2)}</span>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#64748b" }}>
+              <span>Deposit Collected:</span>
+              <span style={{ fontWeight: 700, color: "#059669" }}>- ${depositCollected.toFixed(2)}</span>
+            </div>
+
+            <div style={{ height: 1, background: "#e2e8f0" }} />
+
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+              <span style={{ fontWeight: 700, color: "#0f172a" }}>Outstanding Balance:</span>
+              <span style={{ fontWeight: 800, color: "#f59e0b" }}>${outstandingBalance.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div className="form-group" style={{ marginTop: 8 }}>
+            <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Balance Collected ($)</label>
+            <input
+              type="number"
+              step="0.01"
+              min={0}
+              required
+              className="form-input"
+              style={{ width: "100%", padding: "12px", border: "2px solid #bfdbfe", borderRadius: "10px", fontSize: 16, fontWeight: 700, color: "#2563eb" }}
+              value={balanceCollected}
+              onChange={(e) => handleBalanceChange(parseFloat(e.target.value) || 0)}
+            />
+          </div>
+
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "12px 16px", borderRadius: 10,
+            background: remaining === 0 ? "#f0fdf4" : "#fefce8",
+            border: `1px solid ${remaining === 0 ? "#bbf7d0" : "#fde68a"}`,
+          }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: remaining === 0 ? "#15803d" : "#92400e" }}>
+              {remaining === 0 ? "✅ Fully Settled" : "Remaining Balance:"}
+            </span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: remaining === 0 ? "#15803d" : "#b45309" }}>
+              ${remaining.toFixed(2)}
+            </span>
+          </div>
+
+          <div className="form-group">
+            <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Payment Status</label>
+            <select
+              className="form-input"
+              style={{ width: "100%", padding: "10px 12px", border: "2px solid #e2e8f0", borderRadius: "10px", fontSize: 14, fontWeight: 600 }}
+              value={paymentStatus}
+              onChange={(e) => setPaymentStatus(e.target.value)}
+            >
+              <option value="Pending">Pending</option>
+              <option value="Paid">Paid</option>
+            </select>
+          </div>
+
+          <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+            <button type="button" onClick={onClose} style={{ flex: 1, padding: 13, borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#475569" }}>Cancel</button>
+            <button type="submit" disabled={loading} style={{ flex: 2, padding: 13, borderRadius: 10, border: "none", background: "linear-gradient(135deg,#059669,#047857)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+              {loading ? (isFinalCompletion ? "Completing..." : "Saving...") : (isFinalCompletion ? "Job Fully Completed ✓" : "Mark Job Done ✓")}
             </button>
           </div>
         </form>

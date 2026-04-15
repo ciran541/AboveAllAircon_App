@@ -142,7 +142,6 @@ export default function JobModal({
   return (
     <div
       style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(15,23,42,0.45)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}
-      onClick={onClose}
     >
       <div
         style={{ background: "#fff", width: "100%", maxWidth: "600px", maxHeight: "90vh", borderRadius: "24px", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", overflow: "hidden", border: "1px solid #f1f5f9" }}
@@ -281,12 +280,12 @@ export default function JobModal({
               <label style={{ fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>Visit Schedule</label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <div className="form-group">
-                  <label className="form-label">Visit Date</label>
-                  <input type="date" className="form-input" value={formData.visit_date || ""} onChange={(e) => setFormData({ ...formData, visit_date: e.target.value })} />
+                  <label className="form-label">Visit Date *</label>
+                  <input type="date" required className="form-input" value={formData.visit_date || ""} onChange={(e) => setFormData({ ...formData, visit_date: e.target.value })} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Visit Time</label>
-                  <input type="time" className="form-input" value={formData.visit_time || ""} onChange={(e) => setFormData({ ...formData, visit_time: e.target.value })} />
+                  <label className="form-label">Visit Time *</label>
+                  <input type="time" required className="form-input" value={formData.visit_time || ""} onChange={(e) => setFormData({ ...formData, visit_time: e.target.value })} />
                 </div>
               </div>
             </div>

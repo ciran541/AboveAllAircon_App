@@ -240,6 +240,7 @@ export interface InvoiceData {
   jobDateStr: string;        // e.g. "March 25th, 2026" or "TBD"
   isQuotation?: boolean;
   cvRedeemed?: boolean;
+  cvAmount?: number;
 }
 
 interface InvoicePDFProps {
@@ -257,10 +258,10 @@ const Bullet: React.FC<{ text: string }> = ({ text }) => (
 const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
   const logoUrl = '/logo.png';
 
-  const depositLabel =
-    data.depositCollected > 0
-      ? `S$${data.depositCollected.toFixed(0)}\nCollected`
-      : `S$${data.depositCollected.toFixed(0)}`;
+  const formattedDeposit = `S$${data.depositCollected.toFixed(0)}`;
+  const depositLabel = data.isQuotation 
+    ? formattedDeposit 
+    : (data.depositCollected > 0 ? `${formattedDeposit}\nCollected` : formattedDeposit);
 
   return (
     <Document>
@@ -433,20 +434,24 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                 <Text style={styles.totalLabelCell}>Total</Text>
                 <Text style={styles.totalValueCell}>S${data.quotedAmount.toFixed(0)}</Text>
               </View>
-              {!data.isQuotation && (
-                <>
-                  <View style={styles.totalLine}>
-                    <Text style={styles.totalLabelCell}>Deposit</Text>
-                    <Text style={styles.totalValueCell}>{depositLabel}</Text>
-                  </View>
-                  <View style={styles.totalLine}>
-                    <Text style={[styles.totalLabelCell, styles.balanceBg]}>Balance</Text>
-                    <Text style={[styles.totalValueCell, styles.balanceBg]}>
-                      S${data.balance.toFixed(0)}
-                    </Text>
-                  </View>
-                </>
+              {data.cvRedeemed && (
+                <View style={styles.totalLine}>
+                  <Text style={[styles.totalLabelCell, { color: '#10b981' }]}>CV Redeemed</Text>
+                  <Text style={[styles.totalValueCell, { color: '#10b981' }]}>
+                    S${(data.cvAmount || 0).toFixed(0)}
+                  </Text>
+                </View>
               )}
+              <View style={styles.totalLine}>
+                <Text style={styles.totalLabelCell}>{data.isQuotation ? 'Deposit' : 'Deposit'}</Text>
+                <Text style={styles.totalValueCell}>{depositLabel}</Text>
+              </View>
+              <View style={styles.totalLine}>
+                <Text style={[styles.totalLabelCell, styles.balanceBg]}>Balance</Text>
+                <Text style={[styles.totalValueCell, styles.balanceBg]}>
+                  S${data.balance.toFixed(0)}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
@@ -458,9 +463,11 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
               CV redeemed (SG Climate Voucher)
             </Text>
           )}
-          <Text style={[styles.footerBold, { marginBottom: 12 }]}>
-            Job will take place and be completed on {data.jobDateStr}
-          </Text>
+          {!data.isQuotation && (
+            <Text style={[styles.footerBold, { marginBottom: 12 }]}>
+              Job will take place and be completed on {data.jobDateStr}
+            </Text>
+          )}
           <Text style={styles.footerBold}>
             Upon completion of work, please make a Paynow transfer for balance payment to our company UEN
           </Text>

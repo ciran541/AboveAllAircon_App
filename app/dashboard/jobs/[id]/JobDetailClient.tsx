@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import InvoicePreviewModal from "@/components/InvoicePreviewModal";
-import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal } from "@/components/StageModals";
+import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal, CompleteJobModal } from "@/components/StageModals";
 
 const STAGES = [
   "Site Visit Scheduled",
@@ -13,6 +13,7 @@ const STAGES = [
   "Job Scheduled",
   "First Visit",
   "Second Visit",
+  "Job Done (Payment Pending)",
   "Completed",
 ];
 
@@ -48,6 +49,8 @@ export default function JobDetailClient({
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [documentMode, setDocumentMode] = useState<"invoice" | "quotation">("invoice");
   const [showSecondVisitModal, setShowSecondVisitModal] = useState(false);
+  const [showCompleteJobModal, setShowCompleteJobModal] = useState(false);
+  const [targetStage, setTargetStage] = useState<string>("");
   const [whatsappText, setWhatsappText] = useState("");
 
   // Material management
@@ -74,11 +77,27 @@ export default function JobDetailClient({
 
   // ── Stage advance ──────────────────────────────────────────
   const advanceStage = async (newStage: string, extraFields?: Record<string, any>) => {
-    setLoading(true);
     const dbStage = getStageDB(newStage);
-    const { data, error } = await supabase.from("jobs").update({ stage: dbStage, ...extraFields }).eq("id", job.id).select().single();
-    if (!error && data) setJob({ ...job, ...data });
-    else if (error) alert("Error: " + error.message);
+    const updates = { stage: dbStage, ...extraFields };
+    const oldJob = { ...job };
+
+    // Optimistic Update: Refresh UI immediately
+    setJob((prev: any) => ({ ...prev, ...updates }));
+
+    setLoading(true);
+    const { data, error } = await supabase.from("jobs")
+      .update(updates)
+      .eq("id", job.id)
+      .select()
+      .single();
+
+    if (error) {
+      alert("Error saving stage update: " + error.message);
+      setJob(oldJob); // Rollback on failure
+    } else if (data) {
+      // Re-sync with server data just in case of server-side side effects
+      setJob((prev: any) => ({ ...prev, ...data }));
+    }
     setLoading(false);
   };
 
@@ -90,25 +109,42 @@ export default function JobDetailClient({
 
   // ── Quotation submit ───────────────────────────────────────
   const handleQuotationSubmit = async (updates: any, wpText: string) => {
+    const oldJob = { ...job };
+    const finalUpdates = { stage: "Quotation Sent", ...updates };
+
+    // Optimistic Update: Close modal and show WhatsApp template instantly
+    setJob((prev: any) => ({ ...prev, ...finalUpdates }));
+    setWhatsappText(wpText);
+    setShowQuotationModal(false);
+    setShowWhatsAppTemplate(true);
+
     setLoading(true);
-    const { data, error } = await supabase.from("jobs").update({
-      stage: "Quotation Sent",
-      ...updates,
-    }).eq("id", job.id).select().single();
-    if (!error && data) {
-      setJob({ ...job, ...data });
-      setWhatsappText(wpText);
-      setShowQuotationModal(false);
-      setShowWhatsAppTemplate(true);
-    } else if (error) {
-      alert("Error: " + error.message);
+    const { data, error } = await supabase.from("jobs")
+      .update(finalUpdates)
+      .eq("id", job.id)
+      .select()
+      .single();
+
+    if (error) {
+      alert("Error updating quotation: " + error.message);
+      setJob(oldJob); // Rollback
+      setShowWhatsAppTemplate(false);
+      setShowQuotationModal(true); // Re-open for the user
+    } else if (data) {
+      setJob((prev: any) => ({ ...prev, ...data }));
     }
     setLoading(false);
   };
 
   // ── Confirm Job submit ─────────────────────────────────────
   const handleConfirmJobSubmit = async (updates: any) => {
-    await advanceStage("Job Scheduled", updates);
+    // Advance to "Job Scheduled" if currently in an earlier stage, 
+    // otherwise just update fields in the current stage.
+    const currentIdx = STAGES.indexOf(normalizedStage);
+    const targetIdx = STAGES.indexOf("Job Scheduled");
+    const targetStage = currentIdx < targetIdx ? "Job Scheduled" : normalizedStage;
+    
+    await advanceStage(targetStage, updates);
     setShowConfirmJobModal(false);
   };
 
@@ -116,6 +152,14 @@ export default function JobDetailClient({
   const handleSecondVisitSubmit = async (updates: any) => {
     await advanceStage("Second Visit", updates);
     setShowSecondVisitModal(false);
+  };
+
+  // ── Complete Job submit ────────────────────────────────────
+  const handleCompleteJobSubmit = async (updates: any) => {
+    // If user marks as "Paid" in the modal, we skip "Payment Pending" and go straight to "Completed"
+    const targetStage = updates.payment_status === "Paid" ? "Completed" : "Job Done (Payment Pending)";
+    await advanceStage(targetStage, updates);
+    setShowCompleteJobModal(false);
   };
 
 
@@ -226,7 +270,14 @@ export default function JobDetailClient({
                   📄 Preview & Download Quotation
                 </button>
                 <button
-                  onClick={() => { setDocumentMode("invoice"); setShowInvoiceModal(true); }}
+                  onClick={() => {
+                    if (!job.job_date) {
+                      setShowConfirmJobModal(true);
+                      return;
+                    }
+                    setDocumentMode("invoice");
+                    setShowInvoiceModal(true);
+                  }}
                   style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #10b981, #059669)", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)" }}
                 >
                   📄 Preview & Download Invoice
@@ -317,21 +368,27 @@ export default function JobDetailClient({
                   style={{ padding: "12px 28px", background: "linear-gradient(135deg, #059669, #047857)", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(5,150,105,0.3)" }}>
                   📅 Schedule Second Visit
                 </button>
-                <button onClick={() => advanceStage("Completed")} disabled={loading}
+                <button onClick={() => { setTargetStage("Job Done (Payment Pending)"); setShowCompleteJobModal(true); }} disabled={loading}
                   style={{ padding: "12px 28px", background: "linear-gradient(135deg, #10b981, #059669)", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(16,185,129,0.3)" }}>
-                  🏆 Mark as Completed
+                  ✅ Mark Job Done (Pay Pending)
                 </button>
               </div>
             )}
             {normalizedStage === "Second Visit" && (
-              <button onClick={() => advanceStage("Completed")} disabled={loading}
+              <button onClick={() => { setTargetStage("Job Done (Payment Pending)"); setShowCompleteJobModal(true); }} disabled={loading}
                 style={{ padding: "12px 28px", background: "linear-gradient(135deg, #10b981, #059669)", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(16,185,129,0.3)" }}>
-                🏆 Mark as Completed
+                ✅ Mark Job Done (Pay Pending)
+              </button>
+            )}
+            {normalizedStage === "Job Done (Payment Pending)" && (
+              <button onClick={() => { setTargetStage("Completed"); setShowCompleteJobModal(true); }} disabled={loading}
+                style={{ padding: "12px 28px", background: "linear-gradient(135deg, #059669, #047857)", color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(5,150,105,0.3)" }}>
+                💰 Confirm Final Payment
               </button>
             )}
             {normalizedStage === "Completed" && (
               <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 20px", background: "#f0fdf4", borderRadius: 10, border: "1px solid #bbf7d0", color: "#16a34a", fontWeight: 700, fontSize: 14 }}>
-                🏆 Job Successfully Completed
+                🏆 Job Fully Completed & Paid
               </div>
             )}
           </div>
@@ -653,7 +710,7 @@ export default function JobDetailClient({
 
       {/* ══ INVOICE MODAL ══ */}
       {showInvoiceModal && (
-        <InvoicePreviewModal job={job} onClose={() => setShowInvoiceModal(false)} documentType={documentMode} />
+        <InvoicePreviewModal job={job} onClose={() => setShowInvoiceModal(false)} documentType={documentMode} onUpdateJob={(updates) => setJob({ ...job, ...updates })} />
       )}
 
       {/* ══ CONFIRM JOB MODAL ══ */}
@@ -664,6 +721,11 @@ export default function JobDetailClient({
       {/* ══ SECOND VISIT MODAL ══ */}
       {showSecondVisitModal && (
         <SecondVisitModal job={job} loading={loading} onClose={() => setShowSecondVisitModal(false)} onSubmit={handleSecondVisitSubmit} />
+      )}
+
+      {/* ══ COMPLETE JOB MODAL ══ */}
+      {showCompleteJobModal && (
+        <CompleteJobModal job={job} loading={loading} targetStage={targetStage} onClose={() => setShowCompleteJobModal(false)} onSubmit={handleCompleteJobSubmit} />
       )}
     </>
   );
