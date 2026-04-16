@@ -52,6 +52,12 @@ export type Job = {
   quotation_materials?: string | null;
   quotation_warranty?: string | null;
   engineer_name?: string | null;
+  google_calendar_event_id?: string | null;
+  visit_event_id?: string | null;
+  job_event_id?: string | null;
+  second_visit_event_id?: string | null;
+  second_visit_date?: string | null;
+  second_visit_time?: string | null;
 };
 
 
@@ -158,12 +164,14 @@ export default function JobsClient({
 
     // Optimistic Update
     setJobs(jobs.map((j) => (j.id === jobId ? { ...j, ...finalUpdates } : j)));
-    
+
     startTransition(async () => {
       const result = await updateJobStage(jobId, newStage, updates);
       if (result.error) {
         alert("Error updating job: " + result.error);
         router.refresh(); // rollback on error
+      } else if (result.calendarError) {
+        alert("Job updated, but Google Calendar sync failed: " + result.calendarError);
       }
       setActionLoading(false);
     });
@@ -245,7 +253,7 @@ export default function JobsClient({
 
   const handleCompleteJobSubmit = async (updates: any) => {
     if (!pendingJob) return;
-    
+
     // Automatically move to "Completed" if user marked it as "Paid"
     let finalStage = targetStage || "Job Done (Payment Pending)";
     if (updates.payment_status === "Paid") {
@@ -278,9 +286,9 @@ export default function JobsClient({
   const confirmDeleteJob = async () => {
     if (!jobToDelete) return;
     setDeleteLoading(true);
-    
+
     const result = await deleteJob(jobToDelete.id);
-    
+
     if (result.error) {
       alert("Error deleting job: " + result.error);
     } else {

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import InvoicePreviewModal from "@/components/InvoicePreviewModal";
 import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal, CompleteJobModal } from "@/components/StageModals";
+import { updateJobFields, deleteJob as deleteJobAction } from "@/app/actions/jobActions";
 
 const STAGES = [
   "Site Visit Scheduled",
@@ -81,22 +82,20 @@ export default function JobDetailClient({
     const updates = { stage: dbStage, ...extraFields };
     const oldJob = { ...job };
 
-    // Optimistic Update: Refresh UI immediately
+    // Optimistic update — reflect new stage immediately
     setJob((prev: any) => ({ ...prev, ...updates }));
-
     setLoading(true);
-    const { data, error } = await supabase.from("jobs")
-      .update(updates)
-      .eq("id", job.id)
-      .select()
-      .single();
 
-    if (error) {
-      alert("Error saving stage update: " + error.message);
-      setJob(oldJob); // Rollback on failure
-    } else if (data) {
-      // Re-sync with server data just in case of server-side side effects
-      setJob((prev: any) => ({ ...prev, ...data }));
+    const result = await updateJobFields(job.id, updates);
+
+    if (result.error) {
+      alert("Error saving stage update: " + result.error);
+      setJob(oldJob); // Rollback
+    } else if (result.data) {
+      setJob((prev: any) => ({ ...prev, ...result.data }));
+      if (result.calendarError) {
+        alert("Stage saved, but Google Calendar sync failed: " + result.calendarError);
+      }
     }
     setLoading(false);
   };
@@ -193,7 +192,7 @@ export default function JobDetailClient({
     }
   };
 
-  // ── Edit save ──────────────────────────────────────────────
+  // ── Edit field save (admin edit form) ─────────────────────
   const handleSaveFields = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -207,15 +206,13 @@ export default function JobDetailClient({
     if (fd.has("service_report_no")) updates.service_report_no = fd.get("service_report_no");
     if (fd.has("internal_notes")) updates.internal_notes = fd.get("internal_notes");
     if (fd.has("notes")) updates.notes = fd.get("notes");
-
-    // Conditionally update restricted inputs
     if (fd.has("quoted_amount")) updates.quoted_amount = parseFloat(fd.get("quoted_amount") as string) || 0;
     if (fd.has("deposit_collected")) updates.deposit_collected = parseFloat(fd.get("deposit_collected") as string) || 0;
-    
     if (fd.has("assigned_to")) updates.assigned_to = fd.get("assigned_to") || null;
     if (fd.has("visit_date")) updates.visit_date = fd.get("visit_date") || null;
     if (fd.has("job_date")) updates.job_date = fd.get("job_date") || null;
-    // Customer unit_type update
+
+    // Customer unit_type update (stays as direct Supabase call — no calendar impact)
     const unitType = fd.get("unit_type");
     if (unitType !== null && job.customer_id) {
       await supabase.from("customers").update({ unit_type: unitType || null }).eq("id", job.customer_id);
@@ -230,12 +227,18 @@ export default function JobDetailClient({
       }
     }
 
-    const { data, error } = await supabase.from("jobs").update(updates).eq("id", job.id).select().single();
-    if (!error && data) {
-      const newStaff = staffProfiles.find((s: any) => s.id === data.assigned_to);
-      setJob({ ...job, ...data, assigned_staff: newStaff || null });
+    // Route through server action so calendar sync runs
+    const result = await updateJobFields(job.id, updates);
+    if (!result.error && result.data) {
+      const newStaff = staffProfiles.find((s: any) => s.id === result.data.assigned_to);
+      setJob({ ...job, ...result.data, assigned_staff: newStaff || null });
       setIsEditing(false);
-    } else alert(error?.message);
+      if (result.calendarError) {
+        alert("Changes saved, but Google Calendar sync failed: " + result.calendarError);
+      }
+    } else {
+      alert(result.error);
+    }
     setLoading(false);
   };
 
@@ -291,9 +294,13 @@ export default function JobDetailClient({
               <button
                 style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "#ef4444", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" }}
                 onClick={async () => {
-                  if (confirm("Delete this job permanently?")) {
-                    await supabase.from("jobs").delete().eq("id", job.id);
-                    router.push("/dashboard/jobs");
+                  if (confirm("Delete this job permanently? This will also remove all Google Calendar events.")) {
+                    const result = await deleteJobAction(job.id);
+                    if (result.error) {
+                      alert("Error deleting job: " + result.error);
+                    } else {
+                      router.push("/dashboard/jobs");
+                    }
                   }
                 }}
               >Delete Job</button>

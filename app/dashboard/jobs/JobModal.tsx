@@ -103,10 +103,10 @@ export default function JobModal({
         return;
       }
       newCustomerData = {
-          name: newCustomer.name,
-          phone: newCustomer.phone || null,
-          address: newCustomer.address || null,
-          unit_type: newCustomer.unit_type || null,
+        name: newCustomer.name,
+        phone: newCustomer.phone || null,
+        address: newCustomer.address || null,
+        unit_type: newCustomer.unit_type || null,
       };
     }
 
@@ -122,7 +122,7 @@ export default function JobModal({
     if (!dataToSave.assigned_to) dataToSave.assigned_to = null;
     if (!dataToSave.unit_count) dataToSave.unit_count = 1;
     if (!dataToSave.quoted_amount) dataToSave.quoted_amount = 0;
-    
+
     if (isNew) {
       dataToSave.created_by = userId;
     }
@@ -130,11 +130,14 @@ export default function JobModal({
     const response = await saveJob(dataToSave, newCustomerData);
 
     if (response.error) {
-       setError(response.error);
+      setError(response.error);
     } else if (response.savedJob) {
-       onSave(response.savedJob);
+      if (response.calendarError) {
+        alert(`Job saved, but Google Calendar sync failed: ${response.calendarError}`);
+      }
+      onSave(response.savedJob);
     }
-    
+
     setLoading(false);
   };
 
