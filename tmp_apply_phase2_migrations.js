@@ -14,8 +14,7 @@ const key  = env.match(/SUPABASE_SERVICE_ROLE_KEY=(.*)/)[1].trim();
 const ref  = new URL(url).hostname.split('.')[0];
 
 const SQL_FILES = [
-  'supabase/migrations/20260417000000_dashboard_metrics_rpc.sql',
-  'supabase/migrations/20260417000001_performance_indexes_v2.sql',
+  'supabase/migrations/20260417000002_fix_dashboard_rpc.sql',
 ];
 
 function postSQL(sql) {

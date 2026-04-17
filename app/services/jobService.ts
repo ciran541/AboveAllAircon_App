@@ -7,15 +7,14 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { revalidateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { upsertCalendarEvent, deleteCalendarEvent } from "@/lib/googleCalendar";
 import { getStageDB } from "@/lib/constants";
 
 /** Invalidates all cached job data for a specific user + the admin dashboard. */
 function invalidateJobCaches(userId?: string) {
-  revalidateTag("jobs", "max");
-  if (userId) revalidateTag(`jobs:user:${userId}`, "max");
-  revalidateTag("dashboard:admin", "max");
+  revalidatePath("/dashboard/jobs");
+  revalidatePath("/dashboard");
 }
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;

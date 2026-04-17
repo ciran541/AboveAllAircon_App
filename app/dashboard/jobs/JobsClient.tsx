@@ -338,19 +338,17 @@ export default function JobsClient({
           <div style={{ display: "flex", gap: 10 }}>
             {/* View Switcher */}
             <div style={{ display: "inline-flex", background: "#f1f5f9", padding: "4px", borderRadius: "10px", marginRight: "8px" }}>
-              <button onClick={() => setViewMode("board")} style={{
-                padding: "6px 12px", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
-                cursor: "pointer", display: "flex", alignItems: "center", gap: "6px",
-                background: viewMode === "board" ? "#fff" : "transparent",
-                color: viewMode === "board" ? "#0f172a" : "#64748b",
-                boxShadow: viewMode === "board" ? "0 1px 2px rgba(0,0,0,0.05)" : "none", transition: "all 0.2s"
+              <button onClick={() => { setViewMode("board"); pushFilters({ view: "board" }); }} style={{
+                padding: "8px", background: viewMode === "board" ? "#fff" : "transparent",
+                border: "none", borderRadius: 6, cursor: "pointer",
+                boxShadow: viewMode === "board" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                display: "flex", alignItems: "center", justifyContent: "center"
               }}>🔲 Pipeline</button>
-              <button onClick={() => setViewMode("list")} style={{
-                padding: "6px 12px", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 600,
-                cursor: "pointer", display: "flex", alignItems: "center", gap: "6px",
-                background: viewMode === "list" ? "#fff" : "transparent",
-                color: viewMode === "list" ? "#0f172a" : "#64748b",
-                boxShadow: viewMode === "list" ? "0 1px 2px rgba(0,0,0,0.05)" : "none", transition: "all 0.2s"
+              <button onClick={() => { setViewMode("list"); pushFilters({ view: "list" }); }} style={{
+                padding: "8px", background: viewMode === "list" ? "#fff" : "transparent",
+                border: "none", borderRadius: 6, cursor: "pointer",
+                boxShadow: viewMode === "list" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                display: "flex", alignItems: "center", justifyContent: "center"
               }}>☰ List View</button>
             </div>
             <button onClick={() => setIsFullscreen(!isFullscreen)} style={{

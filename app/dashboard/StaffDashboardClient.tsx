@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { updateJobStage } from "@/app/actions/jobActions";
 
 export default function StaffDashboardClient({ initialJobs, todayStr }: { initialJobs: any[], todayStr: string }) {
   const [jobs, setJobs] = useState(initialJobs);
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  const supabase = createClient();
   const router = useRouter();
 
   // Helper arrays
@@ -29,12 +28,12 @@ export default function StaffDashboardClient({ initialJobs, todayStr }: { initia
   // Action Handlers
   const handleUpdateStage = async (id: string, newStage: string) => {
     setLoadingId(id);
-    const { error } = await supabase.from('jobs').update({ stage: newStage }).eq('id', id);
-    if (!error) {
+    const result = await updateJobStage(id, newStage);
+    if (!result.error) {
       setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, stage: newStage } : j)));
       router.refresh();
     } else {
-      alert("Error updating job schedule: " + error.message);
+      alert("Error updating job schedule: " + result.error);
     }
     setLoadingId(null);
   };
@@ -42,12 +41,12 @@ export default function StaffDashboardClient({ initialJobs, todayStr }: { initia
   const handleMarkCompleted = async (id: string) => {
     setLoadingId(id);
     // Mark as completed sets both stage and status
-    const { error } = await supabase.from('jobs').update({ stage: 'Completed', status: 'won' }).eq('id', id);
-    if (!error) {
+    const result = await updateJobStage(id, 'Completed', { status: 'won' });
+    if (!result.error) {
       setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, stage: 'Completed', status: 'won' } : j)));
       router.refresh();
     } else {
-      alert("Error completing job: " + error.message);
+      alert("Error completing job: " + result.error);
     }
     setLoadingId(null);
   };

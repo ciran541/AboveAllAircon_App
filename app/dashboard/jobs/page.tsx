@@ -90,15 +90,13 @@ export default async function JobsPage({
       const next7 = new Date(today);
       next7.setDate(today.getDate() + 7);
       const next7Str = next7.toISOString().split("T")[0];
-      query = query
-        .gte("created_at", today.toISOString())
-        .lte("created_at", next7.toISOString());
+      query = query.or(`and(visit_date.gte.${todayStr},visit_date.lte.${next7Str}),and(job_date.gte.${todayStr},job_date.lte.${next7Str})`);
     } else if (date_range === "This Month") {
       const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
       const monthEnd   = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      query = query
-        .gte("created_at", monthStart.toISOString())
-        .lte("created_at", monthEnd.toISOString());
+      const mStartStr  = monthStart.toISOString().split("T")[0];
+      const mEndStr    = monthEnd.toISOString().split("T")[0];
+      query = query.or(`and(visit_date.gte.${mStartStr},visit_date.lte.${mEndStr}),and(job_date.gte.${mStartStr},job_date.lte.${mEndStr})`);
     }
 
     // Text search: ac_brand / service_report_no / resolved customer IDs

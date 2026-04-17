@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import InvoicePreviewModal from "@/components/InvoicePreviewModal";
 import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal, CompleteJobModal } from "@/components/StageModals";
-import { updateJobFields, deleteJob as deleteJobAction } from "@/app/actions/jobActions";
+import { updateJobFields, deleteJob as deleteJobAction, updateJobStage } from "@/app/actions/jobActions";
 import { logJobMaterial, removeJobMaterial } from "@/app/actions/inventoryActions";
 import { updateCustomerDetails } from "@/app/actions/customerActions";
 import { JOB_STAGES as STAGES, getStageDisplay, getStageDB, UNIT_TYPES } from "@/lib/constants";
@@ -104,19 +104,13 @@ export default function JobDetailClient({
     setShowWhatsAppTemplate(true);
 
     setLoading(true);
-    const { data, error } = await supabase.from("jobs")
-      .update(finalUpdates)
-      .eq("id", job.id)
-      .select()
-      .single();
+    const result = await updateJobStage(job.id, "Quotation Sent", updates);
 
-    if (error) {
-      alert("Error updating quotation: " + error.message);
+    if (result.error) {
+      alert("Error updating quotation: " + result.error);
       setJob(oldJob); // Rollback
       setShowWhatsAppTemplate(false);
       setShowQuotationModal(true); // Re-open for the user
-    } else if (data) {
-      setJob((prev: any) => ({ ...prev, ...data }));
     }
     setLoading(false);
   };
