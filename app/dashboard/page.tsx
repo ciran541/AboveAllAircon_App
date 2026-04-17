@@ -150,106 +150,52 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   }
 
   // -------------------------
-  // ADMIN VIEW LOGIC
+  // ADMIN VIEW LOGIC — single RPC round-trip
   // -------------------------
-  // Fetch ALL jobs — we split calculations in JS rather than relying on a
-  // date-filtered query which causes wrong bucket attribution.
-  // Pipeline metrics (pipelineValue, pendingEnquiries) = all active jobs, no date filter.
-  // Financial/performance metrics = only jobs whose job_date falls in the selected period.
-  const { data: allJobsData } = await supabase
-    .from('jobs')
-    .select('*, customers(name, address)')
-    .order('updated_at', { ascending: false });
-
-  const { count: jobsTodayCount } = await supabase
-    .from('jobs')
-    .select('*', { count: 'exact', head: true })
-    .eq('job_date', todayStr);
-
-  const todaysAdminJobs = allJobsData?.filter(j => j.job_date === todayStr && j.stage !== 'Completed' && j.stage !== 'Loss (Analysis)' && j.status !== 'won' && j.status !== 'lost') || [];
-
-  const safeJobs = allJobsData || [];
-  // Date-only string for job_date comparison (jobs table stores date, not timestamp)
   const startDateOnly = startDateStr.split('T')[0];
 
-  let revenueCollected = 0;
-  let pendingReceivables = 0;
-  let pipelineValue = 0;
-  let pendingEnquiries = 0;
-  let completedCount = 0;
-  let totalPeriodJobs = 0;
+  const { data: metrics } = await supabase
+    .rpc('get_admin_dashboard_metrics', { p_start_date: startDateOnly });
+
+  const m = (metrics as any) || {};
+
+  const revenueCollected   = Number(m.revenue_collected)   || 0;
+  const pendingReceivables = Number(m.pending_receivables) || 0;
+  const pipelineValue      = Number(m.pipeline_value)      || 0;
+  const pendingEnquiries   = Number(m.pending_enquiries)   || 0;
+  const completedCount     = Number(m.completed_count)     || 0;
+  const totalPeriodJobs    = Number(m.total_period_jobs)   || 0;
+  const jobsTodayCount     = Number(m.jobs_today_count)    || 0;
+  const healthyStock       = Number(m.healthy_stock)       || 0;
+  const lowStock           = Number(m.low_stock)           || 0;
+  const outOfStock         = Number(m.out_of_stock)        || 0;
+
   const serviceMix: Record<string, number> = {
     Servicing: 0, Repair: 0, Installation: 0,
-    'Chemical Wash': 0, 'Chemical Overhaul': 0, 'Gas Top-Up': 0, Dismantling: 0
+    'Chemical Wash': 0, 'Chemical Overhaul': 0, 'Gas Top-Up': 0, Dismantling: 0,
+    ...(m.service_mix || {}),
   };
-  
-  // For Performance Tab
-  const staffPerformance: Record<string, { count: number, revenue: number, name: string }> = {};
+
+  const todaysAdminJobs: any[] = Array.isArray(m.todays_jobs) ? m.todays_jobs : [];
+  const safeItems: any[]       = Array.isArray(m.inv_alerts)  ? m.inv_alerts  : [];
+
+  // Staff performance — merge RPC data with full profile names
   const { data: profiles } = await supabase.from('profiles').select('id, email, full_name');
+  const staffPerformance: Record<string, { count: number; revenue: number; name: string }> = {};
   if (profiles) {
     profiles.forEach(p => {
-       staffPerformance[p.id] = { count: 0, revenue: 0, name: p.full_name || p.email }
-    })
+      staffPerformance[p.id] = { count: 0, revenue: 0, name: p.full_name || p.email };
+    });
   }
-
-  safeJobs.forEach(job => {
-    const amount = Number(job.quoted_amount) || 0;
-    const jobDate = job.job_date || '';
-    // inPeriod: is this job's actual work date within the selected filter range?
-    const inPeriod = jobDate >= startDateOnly;
-
-    // ─── PIPELINE SNAPSHOT (no date filter) ───
-    // Shows current real-time state of the pipeline regardless of period
-    if (job.stage === 'Quotation Sent' && (!job.status || job.status === 'open')) {
-      pipelineValue += amount;
-    }
-    if (job.stage === 'New Enquiry' && (!job.status || job.status === 'open')) {
-      pendingEnquiries++;
-    }
-
-    // ─── PERIOD METRICS (filtered by job_date) ───
-    // Only count jobs that were actually scheduled/worked in the selected period
-    if (inPeriod) {
-      totalPeriodJobs++;
-
-      if (job.stage === 'Completed' && job.payment_status === 'Paid') revenueCollected += amount;
-      if (job.stage === 'Completed' && job.payment_status === 'Pending') pendingReceivables += amount;
-
-      if (job.stage === 'Completed') {
-        completedCount++;
-        if (job.assigned_to) {
-          if (!staffPerformance[job.assigned_to]) {
-            staffPerformance[job.assigned_to] = { count: 0, revenue: 0, name: 'Staff #' + job.assigned_to.substring(0,4) };
-          }
-          staffPerformance[job.assigned_to].count++;
-          staffPerformance[job.assigned_to].revenue += amount;
-        }
-      }
-
-      // Service mix within the period
-      const svcKey = job.service_type as string;
-      if (svcKey && svcKey in serviceMix) {
-        serviceMix[svcKey]++;
-      }
-    }
+  const rpcStaffPerf: Record<string, { count: number; revenue: number }> = m.staff_perf || {};
+  Object.entries(rpcStaffPerf).forEach(([id, s]: [string, any]) => {
+    if (!staffPerformance[id]) staffPerformance[id] = { count: 0, revenue: 0, name: 'Staff #' + id.substring(0, 4) };
+    staffPerformance[id].count   = Number(s.count)   || 0;
+    staffPerformance[id].revenue = Number(s.revenue) || 0;
   });
 
-  const leaderboard = Object.values(staffPerformance).filter(s => s.count > 0).sort((a,b) => b.count - a.count);
+  const leaderboard    = Object.values(staffPerformance).filter(s => s.count > 0).sort((a, b) => b.count - a.count);
   const completionRate = totalPeriodJobs > 0 ? Math.round((completedCount / totalPeriodJobs) * 100) : 0;
-  
-  // For Inventory Tab
-  const { data: inventoryItems } = await supabase.from('inventory_items').select('*');
-  const safeItems = inventoryItems || [];
-  
-  let healthyStock = 0;
-  let lowStock = 0;
-  let outOfStock = 0;
-  
-  safeItems.forEach(item => {
-    if (item.stock_quantity === 0) outOfStock++;
-    else if (item.stock_quantity <= 5) lowStock++;
-    else healthyStock++;
-  });
 
 
   // --- Styles ---

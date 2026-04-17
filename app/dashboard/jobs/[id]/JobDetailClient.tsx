@@ -7,23 +7,9 @@ import { useRouter } from "next/navigation";
 import InvoicePreviewModal from "@/components/InvoicePreviewModal";
 import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal, CompleteJobModal } from "@/components/StageModals";
 import { updateJobFields, deleteJob as deleteJobAction } from "@/app/actions/jobActions";
-
-const STAGES = [
-  "Site Visit Scheduled",
-  "Quotation Sent",
-  "Job Scheduled",
-  "First Visit",
-  "Second Visit",
-  "Job Done (Payment Pending)",
-  "Completed",
-];
-
-const STAGE_DISPLAY: Record<string, string> = { "In Progress": "First Visit" };
-const getStageDisplay = (s: string) => STAGE_DISPLAY[s] || s;
-// Map "First Visit" back to "In Progress" to bypass DB check constraint
-const getStageDB = (s: string) => (s === "First Visit" ? "In Progress" : s);
-
-const UNIT_TYPES = ["BTO", "Resale", "Condo", "Landed", "Commercial"];
+import { logJobMaterial, removeJobMaterial } from "@/app/actions/inventoryActions";
+import { updateCustomerDetails } from "@/app/actions/customerActions";
+import { JOB_STAGES as STAGES, getStageDisplay, getStageDB, UNIT_TYPES } from "@/lib/constants";
 
 export default function JobDetailClient({
   initialJob,
@@ -64,7 +50,7 @@ export default function JobDetailClient({
   const supabase = createClient();
 
   const normalizedStage = getStageDisplay(job.stage);
-  const stageIndex = STAGES.indexOf(normalizedStage);
+  const stageIndex = STAGES.indexOf(normalizedStage as any);
 
   const MATERIAL_STAGES = ["Job Scheduled", "First Visit", "Completed"];
   const canLogMaterials = MATERIAL_STAGES.includes(normalizedStage);
@@ -139,7 +125,7 @@ export default function JobDetailClient({
   const handleConfirmJobSubmit = async (updates: any) => {
     // Advance to "Job Scheduled" if currently in an earlier stage, 
     // otherwise just update fields in the current stage.
-    const currentIdx = STAGES.indexOf(normalizedStage);
+    const currentIdx = STAGES.indexOf(normalizedStage as any);
     const targetIdx = STAGES.indexOf("Job Scheduled");
     const targetStage = currentIdx < targetIdx ? "Job Scheduled" : normalizedStage;
     
@@ -171,24 +157,31 @@ export default function JobDetailClient({
     if (!item) return;
     if (item.stock_quantity < qty) { alert(`Insufficient stock — only ${item.stock_quantity} ${item.unit} available.`); return; }
     setMatLoading(true);
-    const { data, error } = await supabase.from("job_materials").insert([{
-      job_id: job.id, item_id: item.id, quantity_used: qty,
-      created_by: job.created_by, cost_at_time: item.unit_cost || 0, price_at_time: item.unit_price || 0,
-    }]).select("id, item_id, quantity_used, cost_at_time, price_at_time").single();
-    if (!error && data) {
-      setMaterials((prev: any[]) => [...prev, { ...data, inventory_items: { name: item.name, unit: item.unit } }]);
+    
+    const result = await logJobMaterial(job.id, item.id, qty, {
+      created_by: job.created_by,
+      cost_at_time: item.unit_cost || 0,
+      price_at_time: item.unit_price || 0,
+    });
+    
+    if (result.success && result.data) {
+      setMaterials((prev: any[]) => [...prev, result.data]);
       setInventory((prev) => prev.map((i) => i.id === selectedItem ? { ...i, stock_quantity: i.stock_quantity - qty } : i));
       setSelectedItem(""); setUseQty("");
-    } else if (error) alert("Error adding material: " + error.message);
+    } else {
+      alert("Error adding material: " + (result.error || "Unknown error"));
+    }
     setMatLoading(false);
   };
 
   const handleRemoveMaterial = async (matId: string, itemId: string, qty: number) => {
     if (!confirm("Remove this material? Stock will be returned to inventory.")) return;
-    const { error } = await supabase.from("job_materials").delete().eq("id", matId);
-    if (!error) {
+    const result = await removeJobMaterial(matId, itemId, qty);
+    if (result.success) {
       setMaterials((prev: any[]) => prev.filter((m) => m.id !== matId));
       setInventory((prev) => prev.map((i) => i.id === itemId ? { ...i, stock_quantity: i.stock_quantity + qty } : i));
+    } else {
+      alert("Error removing material: " + (result.error || "Unknown error"));
     }
   };
 
@@ -212,10 +205,10 @@ export default function JobDetailClient({
     if (fd.has("visit_date")) updates.visit_date = fd.get("visit_date") || null;
     if (fd.has("job_date")) updates.job_date = fd.get("job_date") || null;
 
-    // Customer unit_type update (stays as direct Supabase call — no calendar impact)
+    // Customer unit_type update via server action
     const unitType = fd.get("unit_type");
     if (unitType !== null && job.customer_id) {
-      await supabase.from("customers").update({ unit_type: unitType || null }).eq("id", job.customer_id);
+      await updateCustomerDetails(job.customer_id, { unit_type: (unitType as string) || null });
     }
 
     if (userRole === "admin") {

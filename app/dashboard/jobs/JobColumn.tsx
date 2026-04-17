@@ -1,6 +1,7 @@
 "use client";
 
-import { Job, getStageDisplay } from "./JobsClient";
+import { Job } from "./JobsClient";
+import { getStageDisplay } from "@/lib/constants";
 
 function IconMapPin() {
   return (

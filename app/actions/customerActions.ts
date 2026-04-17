@@ -1,7 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
-import { revalidatePath } from "next/cache";
+import * as CustomerService from "@/app/services/customerService";
 
 export async function saveCustomer(formData: {
   id?: string;
@@ -9,27 +8,20 @@ export async function saveCustomer(formData: {
   phone?: string;
   email?: string;
   address?: string;
+  unit_type?: string;
 }) {
-  const supabase = await createClient();
+  return CustomerService.saveCustomer(formData);
+}
 
-  const payload = {
-    name: formData.name,
-    phone: formData.phone || null,
-    email: formData.email || null,
-    address: formData.address || null,
-  };
-
-  let error;
-  if (formData.id) {
-    ({ error } = await supabase.from("customers").update(payload).eq("id", formData.id));
-  } else {
-    ({ error } = await supabase.from("customers").insert([payload]));
-  }
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  revalidatePath("/dashboard/customers");
-  return { success: true };
+export async function updateCustomerDetails(
+  customerId: string,
+  updates: Partial<{
+    name: string;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+    unit_type: string | null;
+  }>
+) {
+  return CustomerService.updateCustomer(customerId, updates);
 }

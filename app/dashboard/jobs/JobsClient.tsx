@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useCallback, useRef, useEffect } from "react";
 import JobColumn from "./JobColumn";
 import JobListView from "./JobListView";
 import JobModal from "./JobModal";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal, CompleteJobModal } from "@/components/StageModals";
 import { updateJobStage, deleteJob } from "@/app/actions/jobActions";
+import { JOB_STAGES, getStageDisplay, getStageDB } from "@/lib/constants";
 
 export type Job = {
   id: string;
@@ -61,34 +62,28 @@ export type Job = {
 };
 
 
-export const STAGES = [
-  "Site Visit Scheduled",
-  "Quotation Sent",
-  "Job Scheduled",
-  "First Visit",
-  "Second Visit",
-  "Job Done (Payment Pending)",
-  "Completed",
-];
-
-// Map DB value "In Progress" → display as "First Visit"
-export const STAGE_DISPLAY: Record<string, string> = {
-  "In Progress": "First Visit",
-};
-
-export const getStageDisplay = (stage: string) => STAGE_DISPLAY[stage] || stage;
+export const STAGES = JOB_STAGES;
+export const STAGE_DISPLAY: Record<string, string> = { "In Progress": "First Visit" };
+export const getStageDisplayLocal = getStageDisplay;
 
 export default function JobsClient({
   initialJobs,
   userId,
   role,
   staffProfiles,
+  initialFilters,
+  nextCursor,
 }: {
   initialJobs: Job[];
   userId: string;
   role: "admin" | "staff";
   staffProfiles: { id: string; role: string; full_name?: string; email?: string }[];
+  initialFilters: { q: string; service: string; tech: string; date_range: string; view: string };
+  nextCursor: { created_at: string; id: string } | null;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
@@ -98,13 +93,15 @@ export default function JobsClient({
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Filter States
-  const [searchTerm, setSearchTerm] = useState("");
-  const [serviceTypeFilter, setServiceTypeFilter] = useState("All");
-  const [dateFilter, setDateFilter] = useState("All");
-  const [techFilter, setTechFilter] = useState("All");
-  const [viewMode, setViewMode] = useState<"board" | "list">("board");
+  // URL-driven filter state (initialised from server-side searchParams)
+  const [searchTermRaw, setSearchTermRaw] = useState(initialFilters.q);
+  const [serviceTypeFilter, setServiceTypeFilter] = useState(initialFilters.service);
+  const [dateFilter, setDateFilter] = useState(initialFilters.date_range);
+  const [techFilter, setTechFilter] = useState(initialFilters.tech);
+  const [viewMode, setViewMode] = useState<"board" | "list">(initialFilters.view === "list" ? "list" : "board");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchTerm = searchTermRaw;
 
   // Stage action modals
   const [pendingJob, setPendingJob] = useState<Job | null>(null);
@@ -119,7 +116,31 @@ export default function JobsClient({
   const [actionLoading, setActionLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const router = useRouter();
+  // ── URL-based filter helpers ──────────────────────────────────────────────
+  const pushFilters = useCallback((overrides: Record<string, string>) => {
+    const sp = new URLSearchParams({
+      q:          searchTermRaw,
+      service:    serviceTypeFilter,
+      tech:       techFilter,
+      date_range: dateFilter,
+      view:       viewMode,
+      ...overrides,
+    });
+    // Strip defaults to keep URLs clean
+    ["q", "service", "tech", "date_range"].forEach(k => { if (sp.get(k) === "All" || sp.get(k) === "") sp.delete(k); });
+    if (sp.get("view") === "board") sp.delete("view");
+    router.push(`${pathname}?${sp.toString()}`);
+  }, [searchTermRaw, serviceTypeFilter, techFilter, dateFilter, viewMode, pathname, router]);
+
+  // Debounced search — waits 300ms after typing stops before pushing to URL
+  const setSearchTerm = useCallback((val: string) => {
+    setSearchTermRaw(val);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => pushFilters({ q: val }), 300);
+  }, [pushFilters]);
+
+  // Keep jobs in sync when server sends fresh data (after navigation)
+  useEffect(() => { setJobs(initialJobs); }, [initialJobs]);
 
   const isWithinRange = (dateStr: string | null, range: string) => {
     if (!dateStr || range === "All") return true;
@@ -141,25 +162,14 @@ export default function JobsClient({
     return true;
   };
 
-  const normalizeStage = (stage: string) => {
-    if (stage === "In Progress") return "First Visit";
-    return stage;
-  };
+  const normalizeStage = getStageDisplay;
 
-  const filteredJobs = jobs.filter((j) => {
-    const matchesSearch =
-      j.customers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      j.ac_brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      j.service_report_no?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesService = serviceTypeFilter === "All" || j.service_type === serviceTypeFilter;
-    const matchesTech = techFilter === "All" || j.assigned_to === techFilter;
-    const matchesDate = isWithinRange(j.visit_date || j.job_date, dateFilter);
-    return matchesSearch && matchesService && matchesTech && matchesDate;
-  });
+  // Jobs are already server-filtered — no client-side filter loop needed.
+  const filteredJobs = jobs;
 
   const advanceStageJobsClient = async (jobId: string, newStage: string, updates: any) => {
     setActionLoading(true);
-    const dbStage = newStage === "First Visit" ? "In Progress" : newStage;
+    const dbStage = getStageDB(newStage);
     const finalUpdates = { stage: dbStage, ...updates };
 
     // Optimistic Update
@@ -181,8 +191,8 @@ export default function JobsClient({
     const job = jobs.find((j) => j.id === jobId);
     if (!job) return;
 
-    const currentIndex = STAGES.indexOf(normalizeStage(job.stage));
-    const newIndex = STAGES.indexOf(newStage);
+    const currentIndex = JOB_STAGES.indexOf(normalizeStage(job.stage) as any);
+    const newIndex = JOB_STAGES.indexOf(newStage as any);
 
     if (newIndex < currentIndex) {
       alert("Workflow restriction: Jobs cannot be moved backwards to a previous stage.");
@@ -362,21 +372,21 @@ export default function JobsClient({
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <div style={{ position: "relative", flex: 1, maxWidth: "300px" }}>
             <input
-              placeholder="Search customers or brands..."
+              placeholder="Search customers, brands, reports..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{ padding: "9px 12px 9px 36px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13.5, width: "100%", outline: "none" }}
             />
             <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }}>🔍</span>
           </div>
-          <select value={serviceTypeFilter} onChange={(e) => setServiceTypeFilter(e.target.value)}
+          <select value={serviceTypeFilter} onChange={(e) => { setServiceTypeFilter(e.target.value); pushFilters({ service: e.target.value }); }}
             style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13.5, background: "#fff" }}>
             <option value="All">All Services</option>
             <option value="Servicing">Servicing</option>
             <option value="Installation">Installation</option>
           </select>
           {role === "admin" && (
-            <select value={techFilter} onChange={(e) => setTechFilter(e.target.value)}
+            <select value={techFilter} onChange={(e) => { setTechFilter(e.target.value); pushFilters({ tech: e.target.value }); }}
               style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13.5, background: "#fff" }}>
               <option value="All">All Technicians</option>
               {staffProfiles.map((s) => (
@@ -384,7 +394,7 @@ export default function JobsClient({
               ))}
             </select>
           )}
-          <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}
+          <select value={dateFilter} onChange={(e) => { setDateFilter(e.target.value); pushFilters({ date_range: e.target.value }); }}
             style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13.5, background: "#fff" }}>
             <option value="All">Any Time</option>
             <option value="Today">Today</option>
@@ -392,7 +402,7 @@ export default function JobsClient({
             <option value="This Month">This Month</option>
           </select>
           {(searchTerm || serviceTypeFilter !== "All" || dateFilter !== "All" || techFilter !== "All") && (
-            <button onClick={() => { setSearchTerm(""); setServiceTypeFilter("All"); setDateFilter("All"); setTechFilter("All"); }}
+            <button onClick={() => { setSearchTermRaw(""); setServiceTypeFilter("All"); setDateFilter("All"); setTechFilter("All"); pushFilters({ q: "", service: "All", tech: "All", date_range: "All" }); }}
               style={{ background: "none", border: "none", color: "#3b82f6", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
               Clear
             </button>
@@ -403,7 +413,7 @@ export default function JobsClient({
       <div className="dashboard-content" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, padding: viewMode === "list" ? "24px 28px" : "24px 28px 0" }}>
         {viewMode === "board" ? (
           <div className="pipeline-container" style={{ flex: 1, height: "auto", maxHeight: "100%" }}>
-            {STAGES.map((stage) => {
+            {JOB_STAGES.map((stage) => {
               const columnJobs = filteredJobs.filter((j) => normalizeStage(j.stage) === stage);
               return (
                 <JobColumn
@@ -418,12 +428,31 @@ export default function JobsClient({
             })}
           </div>
         ) : (
-          <div style={{ flex: 1, overflowY: "auto" }}>
+          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}>
             <JobListView
               jobs={filteredJobs}
               onJobClick={openJobDetail}
               staffProfiles={staffProfiles}
             />
+            {/* Keyset pagination controls */}
+            {nextCursor && (
+              <div style={{ display: "flex", justifyContent: "center", paddingBottom: 24 }}>
+                <button
+                  onClick={() => {
+                    const sp = new URLSearchParams({
+                      q: searchTerm, service: serviceTypeFilter, tech: techFilter,
+                      date_range: dateFilter, view: "list",
+                      cursor_created_at: nextCursor.created_at,
+                      cursor_id: nextCursor.id,
+                    });
+                    router.push(`${pathname}?${sp.toString()}`);
+                  }}
+                  style={{ padding: "10px 28px", background: "#0f172a", color: "#fff", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                >
+                  Load Next Page →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

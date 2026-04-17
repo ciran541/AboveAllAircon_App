@@ -4,10 +4,9 @@ import { useState, useEffect } from "react";
 import { Job, STAGES } from "./JobsClient";
 import { saveJob } from "@/app/actions/jobActions";
 import { createClient } from "@/lib/supabase/client";
+import { JOB_STAGES, UNIT_TYPES } from "@/lib/constants";
 
 type Customer = { id: string; name: string; phone: string | null; address: string | null; unit_type?: string | null; };
-
-const UNIT_TYPES = ["BTO", "Resale", "Condo", "Landed", "Commercial"];
 
 export default function JobModal({
   job,
