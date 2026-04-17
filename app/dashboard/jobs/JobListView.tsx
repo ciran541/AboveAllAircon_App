@@ -2,6 +2,7 @@
 
 import { Job } from "./JobsClient";
 import { getStageDisplay } from "@/lib/constants";
+import { useRouter } from "next/navigation";
 
 export default function JobListView({
   jobs,
@@ -12,6 +13,8 @@ export default function JobListView({
   onJobClick: (job: Job) => void;
   staffProfiles: { id: string; role: string; full_name?: string; name?: string; email?: string }[];
 }) {
+  const router = useRouter();
+
   return (
     <div style={{ background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
@@ -44,6 +47,7 @@ export default function JobListView({
                 <tr 
                   key={job.id} 
                   onClick={() => onJobClick(job)}
+                  onMouseEnter={() => router.prefetch(`/dashboard/jobs/${job.id}`)}
                   style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background 0.2s' }}
                   className="list-row-hover"
                 >

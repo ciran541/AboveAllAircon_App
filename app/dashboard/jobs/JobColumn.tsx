@@ -2,6 +2,7 @@
 
 import { Job } from "./JobsClient";
 import { getStageDisplay } from "@/lib/constants";
+import { useRouter } from "next/navigation";
 
 function IconMapPin() {
   return (
@@ -62,6 +63,7 @@ export default function JobColumn({
   onDropJob: (jobId: string, newStage: string) => void;
   onDeleteJob: (job: Job) => void;
 }) {
+  const router = useRouter();
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     (e.currentTarget as HTMLElement).style.boxShadow = "inset 0 0 0 2px var(--accent)";
@@ -125,6 +127,7 @@ export default function JobColumn({
                 display: "flex", flexDirection: "column", gap: 10, transition: "all 0.15s ease", position: "relative",
               }}
               onMouseEnter={(e) => {
+                router.prefetch(`/dashboard/jobs/${job.id}`);
                 (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
                 (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 16px -4px rgba(0,0,0,0.08)";
                 (e.currentTarget as HTMLElement).style.borderColor = theme.color;
