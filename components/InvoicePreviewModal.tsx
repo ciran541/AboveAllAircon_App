@@ -105,14 +105,15 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
     const { name, value, type, checked } = target;
     setData(prev => {
       const next = { ...prev, [name]: type === 'checkbox' ? checked : value } as any;
-      if (name === 'quotedAmount' || name === 'depositCollected' || name === 'cvAmount') {
+      if (name === 'quotedAmount' || name === 'depositCollected' || name === 'cvAmount' || name === 'cvRedeemed') {
         const q = parseFloat(next.quotedAmount) || 0;
         const d = parseFloat(next.depositCollected) || 0;
         const c = parseFloat(next.cvAmount) || 0;
+        const r = !!next.cvRedeemed;
         next.quotedAmount = q;
         next.depositCollected = d;
         next.cvAmount = c;
-        next.balance = q - d;
+        next.balance = q - d - (r ? c : 0);
       }
       return next as InvoiceData;
     });

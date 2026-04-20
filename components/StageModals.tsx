@@ -31,7 +31,7 @@ export function SiteVisitModal({
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300, padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 480, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: "24px 28px", width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
         <div style={{ fontSize: 24, marginBottom: 8 }}>🗓</div>
         <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 6px 0" }}>Schedule Site Visit</h3>
         <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 24px 0" }}>Fill in the visit details. Address and phone are pre-filled from the customer record.</p>
@@ -152,7 +152,7 @@ Hope to hear from you the soonest!`;
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300, padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: "24px 28px", width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
         <div style={{ fontSize: 24, marginBottom: 8 }}>📋</div>
         <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 6px 0" }}>Submit Quotation</h3>
         <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 24px 0" }}>Confirm service details — a WhatsApp template will be generated for you to send to the customer.</p>
@@ -214,7 +214,7 @@ export function WhatsAppTemplateModal({
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1400, padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 560, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: "24px 28px", width: "100%", maxWidth: 560, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
           <div style={{ width: 44, height: 44, borderRadius: 12, background: "#dcfce7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>💬</div>
           <div>
@@ -255,6 +255,8 @@ export function ConfirmJobModal({
   const [cjDate, setCjDate] = useState(job?.job_date || "");
   const [cjTime, setCjTime] = useState(job?.job_time || "");
   const [cjCollected, setCjCollected] = useState(job?.deposit_collected || 0);
+  const [cvRedeemed, setCvRedeemed] = useState(Boolean(job?.cv_redeemed));
+  const [cvAmount, setCvAmount] = useState(Number(job?.cv_amount || 0));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -263,12 +265,14 @@ export function ConfirmJobModal({
       job_date: cjDate,
       job_time: cjTime || null,
       deposit_collected: cjCollected,
+      cv_redeemed: cvRedeemed,
+      cv_amount: cvAmount,
     });
   };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300, padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 460, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: "24px 28px", width: "100%", maxWidth: 460, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
         <div style={{ fontSize: 24, marginBottom: 8 }}>✅</div>
         <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 6px 0" }}>Confirm Job</h3>
         <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 24px 0" }}>Enter the confirmed job date and deposit details to proceed.</p>
@@ -291,13 +295,32 @@ export function ConfirmJobModal({
               <input type="number" step="0.01" className="form-input" style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: "8px" }} value={cjCollected} onChange={(e) => setCjCollected(parseFloat(e.target.value) || 0)} />
             </div>
 
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "end" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 10 }}>
+                <input type="checkbox" id="cjCvRedeemed" checked={cvRedeemed} onChange={(e) => setCvRedeemed(e.target.checked)} style={{ width: 14, height: 14, cursor: 'pointer' }} />
+                <label htmlFor="cjCvRedeemed" style={{ fontSize: 11, fontWeight: 700, color: "#475569", cursor: 'pointer' }}>Apply SG CV</label>
+              </div>
+
+              {cvRedeemed && (
+                <div className="form-group">
+                  <label style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>CV Amount ($)</label>
+                  <input type="number" step="0.01" className="form-input" style={{ width: "100%", padding: "7px 10px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: 12 }} value={cvAmount} onChange={(e) => setCvAmount(parseFloat(e.target.value) || 0)} />
+                </div>
+              )}
+            </div>
+
             <div style={{ height: 1, background: "#e2e8f0", margin: "4px 0" }} />
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#64748b" }}>
               <span>Quoted Amount:</span><span style={{ fontWeight: 700, color: "#0f172a" }}>${Number(job?.quoted_amount || 0).toFixed(2)}</span>
             </div>
+            {cvRedeemed && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#10b981" }}>
+                <span>Voucher Deduction:</span><span style={{ fontWeight: 700 }}>-${cvAmount.toFixed(2)}</span>
+              </div>
+            )}
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#64748b" }}>
               <span>Remaining Balance:</span>
-              <span style={{ fontWeight: 700, color: "#f59e0b" }}>${Math.max(0, Number(job?.quoted_amount || 0) - cjCollected).toFixed(2)}</span>
+              <span style={{ fontWeight: 700, color: "#f59e0b" }}>${Math.max(0, Number(job?.quoted_amount || 0) - cjCollected - (cvRedeemed ? cvAmount : 0)).toFixed(2)}</span>
             </div>
           </div>
           <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
@@ -338,7 +361,7 @@ export function SecondVisitModal({
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300, padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 460, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: "24px 28px", width: "100%", maxWidth: 460, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
         <div style={{ fontSize: 24, marginBottom: 8 }}>📅</div>
         <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 6px 0" }}>Schedule Second Visit</h3>
         <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 24px 0" }}>Enter the confirmed date and time for the second visit callback.</p>
@@ -382,12 +405,11 @@ export function CompleteJobModal({
   const isFinalCompletion = targetStage === "Completed";
   const quotedAmount = Number(job?.quoted_amount || 0);
   const depositCollected = Number(job?.deposit_collected || 0);
-  const cvAmount = Number(job?.cv_amount || 0);
-  const cvRedeemed = Boolean(job?.cv_redeemed);
-  const prevBalanceCollected = Number(job?.final_payment_collected || 0);
+  const [cvAmount, setCvAmount] = useState<number>(Number(job?.cv_amount || 0));
+  const [cvRedeemed, setCvRedeemed] = useState<boolean>(Boolean(job?.cv_redeemed));
 
-  // Balance = Total - Deposit only. CV is display only, NOT in calculation.
-  const outstandingBalance = Math.max(0, quotedAmount - depositCollected);
+  const outstandingBalance = Math.max(0, quotedAmount - depositCollected - (cvRedeemed ? cvAmount : 0));
+  const prevBalanceCollected = Number(job?.final_payment_collected || 0);
 
   // Default new collection to the remaining balance if final completion, otherwise 0
   const [newCollection, setNewCollection] = useState<number>(
@@ -415,6 +437,8 @@ export function CompleteJobModal({
     const updates: any = {
       final_payment_collected: totalBalanceCollected,
       payment_status: paymentStatus,
+      cv_redeemed: cvRedeemed,
+      cv_amount: cvAmount,
     };
     if (paymentStatus === "Paid" && job?.payment_status !== "Paid") {
       updates.payment_collected_at = new Date().toISOString();
@@ -424,7 +448,7 @@ export function CompleteJobModal({
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1300, padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 460, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: "24px 28px", width: "100%", maxWidth: 460, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.2)" }}>
         <div style={{ fontSize: 24, marginBottom: 8 }}>{isFinalCompletion ? "🏆" : "💰"}</div>
         <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 6px 0" }}>
           {isFinalCompletion ? "Finalize Completion" : "Review Financials"}
@@ -444,10 +468,24 @@ export function CompleteJobModal({
               <span>Total Quoted:</span><span style={{ fontWeight: 700, color: "#0f172a" }}>${quotedAmount.toFixed(2)}</span>
             </div>
 
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "end", marginBottom: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 10 }}>
+                <input type="checkbox" id="compCvRedeemed" checked={cvRedeemed} onChange={(e) => setCvRedeemed(e.target.checked)} style={{ width: 14, height: 14, cursor: 'pointer' }} />
+                <label htmlFor="compCvRedeemed" style={{ fontSize: 11, fontWeight: 700, color: "#475569", cursor: 'pointer' }}>Apply SG CV</label>
+              </div>
+
+              {cvRedeemed && (
+                <div className="form-group">
+                  <label style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>CV Amount ($)</label>
+                  <input type="number" step="0.01" className="form-input" style={{ width: "100%", padding: "7px 10px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: 12 }} value={cvAmount} onChange={(e) => setCvAmount(parseFloat(e.target.value) || 0)} />
+                </div>
+              )}
+            </div>
+
             {cvRedeemed && cvAmount > 0 && (
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#10b981", background: "#f0fdf4", padding: "6px 10px", borderRadius: 8, border: "1px solid #bbf7d0" }}>
-                <span>🏷 CV Redeemed (info only):</span>
-                <span style={{ fontWeight: 700 }}>${cvAmount.toFixed(2)}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#10b981", background: "#f0fdf4", padding: "6px 10px", borderRadius: 8, border: "1px solid #bbf7d0", marginBottom: 4 }}>
+                <span>🏷 CV Redeemed Deduction:</span>
+                <span style={{ fontWeight: 700 }}>-${cvAmount.toFixed(2)}</span>
               </div>
             )}
 

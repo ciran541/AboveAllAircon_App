@@ -198,6 +198,9 @@ export default function JobDetailClient({
     if (fd.has("assigned_to")) updates.assigned_to = fd.get("assigned_to") || null;
     if (fd.has("visit_date")) updates.visit_date = fd.get("visit_date") || null;
     if (fd.has("job_date")) updates.job_date = fd.get("job_date") || null;
+    if (fd.has("cv_redeemed")) updates.cv_redeemed = fd.get("cv_redeemed") === "on";
+    else if (isEditing) updates.cv_redeemed = false;
+    if (fd.has("cv_amount")) updates.cv_amount = parseFloat(fd.get("cv_amount") as string) || 0;
 
     // Customer unit_type update via server action
     const unitType = fd.get("unit_type");
@@ -231,7 +234,7 @@ export default function JobDetailClient({
 
   const resolvedStaff = job.assigned_staff || staffProfiles.find((s: any) => s.id === job.assigned_to);
   const staffName = resolvedStaff ? (resolvedStaff.full_name || resolvedStaff.name || resolvedStaff.email) : null;
-  const remaining = (Number(job.quoted_amount) || 0) - (Number(job.deposit_collected) || 0);
+  const remaining = (Number(job.quoted_amount) || 0) - (Number(job.deposit_collected) || 0) - (job.cv_redeemed ? (Number(job.cv_amount) || 0) : 0);
 
   return (
     <>
@@ -534,6 +537,25 @@ export default function JobDetailClient({
                   {isEditing ? <input name="deposit_collected" defaultValue={job.deposit_collected || 0} style={{ width: 90, textAlign: "right" }} className="form-input" /> : <span style={{ fontSize: 15, fontWeight: 700, color: "#059669" }}>${Number(job.deposit_collected || 0).toFixed(2)}</span>}
                 </div>
                 <div style={{ height: 1, background: "#e2e8f0" }} />
+                
+                {/* CV Section */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 13, color: "#64748b" }}>SG Climate Voucher</span>
+                    {isEditing && (
+                      <input type="checkbox" name="cv_redeemed" defaultChecked={job.cv_redeemed} style={{ width: 14, height: 14, cursor: 'pointer' }} />
+                    )}
+                  </div>
+                  {isEditing ? (
+                    <input name="cv_amount" defaultValue={job.cv_amount || 0} style={{ width: 90, textAlign: "right" }} className="form-input" />
+                  ) : (
+                    <span style={{ fontSize: 15, fontWeight: 700, color: job.cv_redeemed ? "#10b981" : "#94a3b8" }}>
+                      {job.cv_redeemed ? `-$${Number(job.cv_amount || 0).toFixed(2)}` : "$0.00"}
+                    </span>
+                  )}
+                </div>
+                <div style={{ height: 1, background: "#e2e8f0" }} />
+
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Remaining Balance</span>
                   <span style={{ fontSize: 18, fontWeight: 900, color: remaining > 0 ? "#f59e0b" : "#10b981" }}>${remaining.toFixed(2)}</span>
