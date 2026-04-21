@@ -38,9 +38,9 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 
 const EVENT_CONFIG: Record<CalendarEventType, { prefix: string; colorId: string }> = {
-  site_visit:   { prefix: "[Site Visit]", colorId: "5" },   // yellow (banana)
-  job:          { prefix: "[Job]",         colorId: "9" },   // blue  (blueberry)
-  second_visit: { prefix: "[2nd Visit]",   colorId: "3" },   // purple (grape)
+  site_visit:   { prefix: "[Site Visit]", colorId: "3" },   // purple (grape)
+  job:          { prefix: "[Job]",         colorId: "8" },   // grey (graphite)
+  second_visit: { prefix: "[2nd Visit]",   colorId: "8" },   // grey (graphite)
 };
 
 // ── JWT / Auth ────────────────────────────────────────────────────────────────
@@ -116,20 +116,20 @@ async function getAccessToken(): Promise<string> {
 
 function buildStartEnd(date: string, time: string | null): { start: string; end: string } {
   const safeTime = time && time.trim() ? time : "09:00";
-  const start = `${date}T${safeTime}:00`;
+  const start = `${date}T${safeTime}:00+08:00`;
 
   const [hourText = "09", minuteText = "00"] = safeTime.split(":");
   const hour = Number(hourText);
   const minute = Number(minuteText);
   const endHour = Number.isFinite(hour) ? Math.min(hour + 2, 23) : 11;
   const endMinute = Number.isFinite(minute) ? minute : 0;
-  const end = `${date}T${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}:00`;
+  const end = `${date}T${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}:00+08:00`;
 
   return { start, end };
 }
 
 function buildEventPayload(params: UpsertParams): CalendarEventPayload {
-  const timezone = process.env.GOOGLE_CALENDAR_TIME_ZONE || "Asia/Singapore";
+  const timezone = "Asia/Singapore";
   const config = EVENT_CONFIG[params.type];
   const { start, end } = buildStartEnd(params.date, params.time);
 
@@ -139,7 +139,7 @@ function buildEventPayload(params: UpsertParams): CalendarEventPayload {
   const jobNotes = params.job.notes?.trim() || "No notes";
 
   return {
-    summary: `${config.prefix} ${customerName} - ${params.job.service_type}`,
+    summary: `${config.prefix} ${customerAddress} - ${customerPhone}`,
     description: [
       `Customer: ${customerName}`,
       `Phone: ${customerPhone}`,
@@ -157,14 +157,14 @@ function buildEventPayload(params: UpsertParams): CalendarEventPayload {
 
 /**
  * Creates or updates a typed calendar event (site visit / job / second visit).
- * Pass `existingEventId` to update an existing event (PUT), otherwise a new one is created (POST).
+ * Pass `existingEventId` to update an existing event (PATCH), otherwise a new one is created (POST).
  */
 export async function upsertCalendarEvent(params: UpsertParams): Promise<{ eventId: string }> {
   const calendarId = encodeURIComponent(getRequiredEnv("GOOGLE_CALENDAR_ID"));
   const token = await getAccessToken();
   const payload = buildEventPayload(params);
 
-  const method = params.existingEventId ? "PUT" : "POST";
+  const method = params.existingEventId ? "PATCH" : "POST";
   const eventPath = params.existingEventId
     ? `/calendars/${calendarId}/events/${encodeURIComponent(params.existingEventId)}`
     : `/calendars/${calendarId}/events`;

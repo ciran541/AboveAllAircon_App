@@ -27,6 +27,8 @@ export default function JobDetailClient({
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showCRMPanel, setShowCRMPanel] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [editedNotes, setEditedNotes] = useState(initialJob.notes || "");
 
   // Stage action modals
   const [showSiteVisitModal, setShowSiteVisitModal] = useState(false);
@@ -195,7 +197,6 @@ export default function JobDetailClient({
     if (fd.has("notes")) updates.notes = fd.get("notes");
     if (fd.has("quoted_amount")) updates.quoted_amount = parseFloat(fd.get("quoted_amount") as string) || 0;
     if (fd.has("deposit_collected")) updates.deposit_collected = parseFloat(fd.get("deposit_collected") as string) || 0;
-    if (fd.has("assigned_to")) updates.assigned_to = fd.get("assigned_to") || null;
     if (fd.has("visit_date")) updates.visit_date = fd.get("visit_date") || null;
     if (fd.has("job_date")) updates.job_date = fd.get("job_date") || null;
     if (fd.has("cv_redeemed")) updates.cv_redeemed = fd.get("cv_redeemed") === "on";
@@ -232,8 +233,6 @@ export default function JobDetailClient({
     setLoading(false);
   };
 
-  const resolvedStaff = job.assigned_staff || staffProfiles.find((s: any) => s.id === job.assigned_to);
-  const staffName = resolvedStaff ? (resolvedStaff.full_name || resolvedStaff.name || resolvedStaff.email) : null;
   const remaining = (Number(job.quoted_amount) || 0) - (Number(job.deposit_collected) || 0) - (job.cv_redeemed ? (Number(job.cv_amount) || 0) : 0);
 
   return (
@@ -468,26 +467,10 @@ export default function JobDetailClient({
               </div>
             </div>
 
-            {/* Assignment Card */}
+            {/* Visit Schedule Card */}
             <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", padding: 24 }}>
-              <h3 style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 20 }}>Assignment</h3>
+              <h3 style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 20 }}>Visit Schedule</h3>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>Assigned Staff</div>
-                  {isEditing && userRole === "admin" ? (
-                    <select name="assigned_to" defaultValue={job.assigned_to} className="form-input">
-                      <option value="">Unassigned</option>
-                      {staffProfiles.map((s: any) => <option key={s.id} value={s.id}>{s.full_name || s.name || s.email}</option>)}
-                    </select>
-                  ) : (
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#475569", border: "1px solid #e2e8f0" }}>
-                        {(staffName || "U").substring(0, 1).toUpperCase()}
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: "#1e293b" }}>{staffName || "Unassigned"}</div>
-                    </div>
-                  )}
-                </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>Visit Date</div>
@@ -586,9 +569,43 @@ export default function JobDetailClient({
 
           {/* Notes */}
           <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", padding: 24, marginTop: 20 }}>
-            <h3 style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 16 }}>Service Notes</h3>
-            {isEditing ? (
-              <textarea name="notes" defaultValue={job.notes} rows={4} className="form-input" style={{ width: "100%" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.5px", margin: 0 }}>Service Notes</h3>
+              {!isEditing && (
+                <button 
+                  type="button"
+                  onClick={async () => {
+                    if (isEditingNotes) {
+                      setLoading(true);
+                      const result = await updateJobFields(job.id, { notes: editedNotes });
+                      if (!result.error) {
+                        setJob({ ...job, notes: editedNotes });
+                        setIsEditingNotes(false);
+                      } else {
+                        alert(result.error);
+                      }
+                      setLoading(false);
+                    } else {
+                      setEditedNotes(job.notes || "");
+                      setIsEditingNotes(true);
+                    }
+                  }}
+                  style={{ fontSize: 12, fontWeight: 700, color: "#2563eb", background: "#eff6ff", border: "none", padding: "4px 12px", borderRadius: 6, cursor: "pointer" }}
+                >
+                  {isEditingNotes ? "Save Notes" : "Edit Notes"}
+                </button>
+              )}
+            </div>
+            {isEditing || isEditingNotes ? (
+              <textarea 
+                name="notes" 
+                value={isEditingNotes ? editedNotes : undefined}
+                defaultValue={!isEditingNotes ? job.notes : undefined}
+                onChange={isEditingNotes ? (e) => setEditedNotes(e.target.value) : undefined}
+                rows={4} 
+                className="form-input" 
+                style={{ width: "100%" }} 
+              />
             ) : (
               <p style={{ margin: 0, fontSize: 15, color: "#334155", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{job.notes || "No notes provided."}</p>
             )}
