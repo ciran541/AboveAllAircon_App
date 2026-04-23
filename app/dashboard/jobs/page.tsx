@@ -43,12 +43,6 @@ export default async function JobsPage({
   }>;
 }) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-
   const params = await searchParams;
   const q          = params.q?.trim() || "";
   const service    = params.service    || "All";
@@ -90,74 +84,43 @@ export default async function JobsPage({
   let hasNextPage = false;
   let staffProfiles: { id: string; role: string; full_name?: string; email?: string }[] = [];
 
-  // Parallelize staff profiles fetch with jobs fetch
+  // Parallelize Auth check, staff profiles, and jobs fetch
+  const userPromise = supabase.auth.getUser();
   const profilesPromise = supabase
     .from("profiles")
     .select("id, role, full_name, name, email");
 
   if (view === "list") {
-    // ── LIST VIEW: keyset pagination ─────────────────────────────────────────
     const { cursor_created_at, cursor_id } = params;
-    let query = supabase
-      .from("jobs")
-      .select(JOB_SELECT)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(LIST_PAGE_SIZE + 1); // fetch +1 to detect next page
+    let query = applyFilters(
+      supabase
+        .from("jobs")
+        .select(JOB_SELECT)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(LIST_PAGE_SIZE + 1)
+    );
 
-    query = applyFilters(query);
-
-    // Apply keyset cursor
     if (cursor_created_at && cursor_id) {
-      query = query.or(
-        `created_at.lt.${cursor_created_at},and(created_at.eq.${cursor_created_at},id.lt.${cursor_id})`
-      );
+      query = query.or(`created_at.lt.${cursor_created_at},and(created_at.eq.${cursor_created_at},id.lt.${cursor_id})`);
     }
 
-    const [profilesRes, jobsRes] = await Promise.all([profilesPromise, query]);
+    const [userRes, profilesRes, jobsRes] = await Promise.all([userPromise, profilesPromise, query]);
     
+    if (!userRes.data.user) redirect("/login");
+
     const rows = jobsRes.data || [];
     hasNextPage = rows.length > LIST_PAGE_SIZE;
     initialJobs = hasNextPage ? rows.slice(0, LIST_PAGE_SIZE) : rows;
-    
-    staffProfiles = (profilesRes.data || []).map((p: any) => ({
-      ...p,
-      email: p.email || "",
-    }));
+    staffProfiles = (profilesRes.data || []).map((p: any) => ({ ...p, email: p.email || "" }));
   } else {
-    // ── BOARD VIEW: consolidated queries to prevent fetch queue lag ──────────────────
-    const activeStages = [
-      "Site Visit Scheduled",
-      "Quotation Sent",
-      "Job Scheduled",
-      "In Progress", // First Visit
-      "Second Visit",
-      "Job Done (Payment Pending)",
-    ];
+    const activeStages = ["Site Visit Scheduled", "Quotation Sent", "Job Scheduled", "In Progress", "Second Visit", "Job Done (Payment Pending)"];
+    const qActive = applyFilters(supabase.from("jobs").select(JOB_SELECT).in("stage", activeStages).order("created_at", { ascending: false }).limit(300));
+    const qCompleted = applyFilters(supabase.from("jobs").select(JOB_SELECT).eq("stage", "Completed").order("created_at", { ascending: false }).limit(KANBAN_PER_STAGE));
 
-    const qActive = applyFilters(
-      supabase
-        .from("jobs")
-        .select(JOB_SELECT)
-        .in("stage", activeStages)
-        .order("created_at", { ascending: false })
-        .limit(300)
-    );
+    const [userRes, profilesRes, activeRes, completedRes] = await Promise.all([userPromise, profilesPromise, qActive, qCompleted]);
 
-    const qCompleted = applyFilters(
-      supabase
-        .from("jobs")
-        .select(JOB_SELECT)
-        .eq("stage", "Completed")
-        .order("created_at", { ascending: false })
-        .limit(KANBAN_PER_STAGE)
-    );
-
-    const [profilesRes, activeRes, completedRes] = await Promise.all([
-      profilesPromise, 
-      qActive, 
-      qCompleted
-    ]);
+    if (!userRes.data.user) redirect("/login");
 
     const allActive = activeRes.data || [];
     const grouped: Record<string, any[]> = {};
@@ -166,16 +129,13 @@ export default async function JobsPage({
       if (grouped[job.stage].length < KANBAN_PER_STAGE) grouped[job.stage].push(job);
     }
 
-    initialJobs = [
-      ...Object.values(grouped).flat(),
-      ...(completedRes.data || []),
-    ];
-
-    staffProfiles = (profilesRes.data || []).map((p: any) => ({
-      ...p,
-      email: p.email || "",
-    }));
+    initialJobs = [...Object.values(grouped).flat(), ...(completedRes.data || [])];
+    staffProfiles = (profilesRes.data || []).map((p: any) => ({ ...p, email: p.email || "" }));
   }
+
+  const userId = (await userPromise).data.user?.id; // will be cached by now
+  if (!userId) redirect("/login");
+
 
   // ── Cursor for next page (list view) ────────────────────────────────────────
   const lastJob = initialJobs[initialJobs.length - 1];
@@ -187,7 +147,7 @@ export default async function JobsPage({
   return (
     <JobsClient
       initialJobs={initialJobs}
-      userId={user.id}
+      userId={userId}
       role={"admin"}
       staffProfiles={staffProfiles}
       initialFilters={{ q, service, date_range, view }}

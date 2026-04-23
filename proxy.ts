@@ -25,8 +25,10 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  // Refresh the session so it doesn't expire
-  await supabase.auth.getUser()
+  // Refresh the session so it doesn't expire. 
+  // Optimization: getSession() is significantly faster on Vercel as it 
+  // avoids a mandatory network round-trip compared to getUser().
+  await supabase.auth.getSession()
 
   return supabaseResponse
 }

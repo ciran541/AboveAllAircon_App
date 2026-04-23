@@ -6,22 +6,14 @@ export const dynamic = "force-dynamic";
 
 export default async function InventoryPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  // Fetch initial items
-  const { data: initialItems } = await supabase
+  
+  const userPromise = supabase.auth.getUser();
+  const itemsPromise = supabase
     .from("inventory_items")
     .select("*")
     .order("name", { ascending: true });
 
-  // Fetch recent logs
-  const { data: initialLogs } = await supabase
+  const logsPromise = supabase
     .from("inventory_logs")
     .select(`
       *,
@@ -30,6 +22,19 @@ export default async function InventoryPage() {
     `)
     .order("created_at", { ascending: false })
     .limit(20);
+
+  const [userRes, itemsRes, logsRes] = await Promise.all([
+    userPromise,
+    itemsPromise,
+    logsPromise
+  ]);
+
+  if (!userRes.data.user) {
+    redirect("/login");
+  }
+
+  const initialItems = itemsRes.data || [];
+  const initialLogs = logsRes.data || [];
 
   return (
     <InventoryClient

@@ -16,7 +16,8 @@ export default async function DashboardLayout({
 
   const email = user.email ?? ''
 
-  // Fetch full name from profiles table
+  // Parallelize profile fetch if needed (already sequentially awaited here, 
+  // but we've optimized the pages which is the main win).
   const { data: profile } = await supabase
     .from('profiles')
     .select('full_name')
