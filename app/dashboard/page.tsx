@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import StaffDashboardClient from './StaffDashboardClient';
 
 // --- SVGs ---
 function IconBriefcase() {
@@ -95,16 +94,10 @@ export const dynamic = 'force-dynamic'
 export default async function DashboardPage({ searchParams }: { searchParams: { filter?: string, tab?: string } }) {
   const supabase = await createClient()
 
-  // Get user role
-  const { data: authData } = await supabase.auth.getUser()
-  const userId = authData?.user?.id
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single()
-  const role = profile?.role || 'staff'
-
   // URL Params
   const params = await searchParams;
   const filter = params.filter || 'last7days';
-  const tab = params.tab || (role === 'admin' ? 'financial' : 'overview');
+  const tab = params.tab || 'financial';
 
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
@@ -126,32 +119,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   }
   const startDateStr = startDate.toISOString();
 
-  // -------------------------
-  // STAFF VIEW LOGIC
-  // -------------------------
-  if (role === 'staff') {
-    const { data: myJobs } = await supabase
-      .from('jobs')
-      .select('*, customers(name, address)')
-      .eq('assigned_to', userId)
-      .order('job_date', { ascending: true })
-
-    const safeMyJobs = myJobs || []
-    
-    // Calculate staff stats (period based)
-    const jobsScheduledToday = safeMyJobs.filter(j => j.job_date === todayStr).length;
-    const pendingVisits = safeMyJobs.filter(j => j.stage === 'Site Visit Scheduled').length;
-    const completedCount = safeMyJobs.filter(j => j.stage === 'Completed' && j.created_at >= startDateStr).length;
-
-    // Upcoming jobs (all future)
-    const upcomingJobs = safeMyJobs.filter(j => (j.job_date || '') >= todayStr && j.stage !== 'Completed');
-
-    return <StaffDashboardClient initialJobs={safeMyJobs} todayStr={todayStr} />
-  }
-
-  // -------------------------
-  // ADMIN VIEW LOGIC — single RPC round-trip
-  // -------------------------
+  // ── Dashboard metrics — single RPC round-trip ──
   const startDateOnly = startDateStr.split('T')[0];
 
   const { data: metrics } = await supabase

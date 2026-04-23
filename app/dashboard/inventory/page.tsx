@@ -14,20 +14,6 @@ export default async function InventoryPage() {
     redirect("/login");
   }
 
-  // Fetch role from profiles table
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  const role: "admin" | "staff" = profile?.role ?? "staff";
-
-  // Prevent staff access
-  if (role !== "admin") {
-    redirect("/dashboard");
-  }
-
   // Fetch initial items
   const { data: initialItems } = await supabase
     .from("inventory_items")

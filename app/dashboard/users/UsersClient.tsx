@@ -106,7 +106,6 @@ function CreateUserModal({
 }) {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<'admin' | 'staff'>('staff')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -119,7 +118,7 @@ function CreateUserModal({
     const res = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, full_name: fullName, role }),
+      body: JSON.stringify({ email, password, full_name: fullName, role: 'admin' }),
     })
 
     const json = await res.json()
@@ -239,69 +238,6 @@ function CreateUserModal({
             />
           </div>
 
-          {/* Role selector */}
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 8 }}>
-              Role
-            </label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {/* Staff option */}
-              <button
-                type="button"
-                onClick={() => setRole('staff')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 14,
-                  padding: '12px 14px',
-                  border: `2px solid ${role === 'staff' ? '#2563eb' : '#e4e9f0'}`,
-                  borderRadius: 10,
-                  background: role === 'staff' ? '#eff6ff' : '#fff',
-                  cursor: 'pointer', textAlign: 'left',
-                  transition: 'all 0.15s',
-                }}
-              >
-                <div style={{
-                  width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                  background: 'linear-gradient(135deg, #059669, #0d9488)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff',
-                }}>
-                  <IconUserSmall />
-                </div>
-                <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, color: '#111827' }}>Staff</div>
-                  <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>Can view and manage assigned jobs</div>
-                </div>
-              </button>
-
-              {/* Admin option */}
-              <button
-                type="button"
-                onClick={() => setRole('admin')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 14,
-                  padding: '12px 14px',
-                  border: `2px solid ${role === 'admin' ? '#2563eb' : '#e4e9f0'}`,
-                  borderRadius: 10,
-                  background: role === 'admin' ? '#eff6ff' : '#fff',
-                  cursor: 'pointer', textAlign: 'left',
-                  transition: 'all 0.15s',
-                }}
-              >
-                <div style={{
-                  width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                  background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff',
-                }}>
-                  <IconShield />
-                </div>
-                <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, color: '#111827' }}>Admin</div>
-                  <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 1 }}>Full access including user management</div>
-                </div>
-              </button>
-            </div>
-          </div>
 
           {/* Actions */}
           <div style={{
@@ -359,8 +295,7 @@ export default function UsersClient({
     setShowModal(false)
   }
 
-  const adminCount = users.filter((u) => u.role === 'admin').length
-  const staffCount = users.filter((u) => u.role === 'staff').length
+
 
   return (
     <>
@@ -388,7 +323,7 @@ export default function UsersClient({
               Team Members
             </h1>
             <p style={{ fontSize: 12.5, color: '#9ca3af', marginTop: 2 }}>
-              {users.length} accounts · {adminCount} admin · {staffCount} staff
+              {users.length} accounts
             </p>
           </div>
         </div>
@@ -416,42 +351,6 @@ export default function UsersClient({
       {/* ── Page Content ────────────────────────────────────────────────── */}
       <div style={{ padding: '24px 28px' }}>
 
-        {/* Stats Row */}
-        <div style={{
-          display: 'flex', alignItems: 'center',
-          background: '#fff', border: '1px solid #e4e9f0',
-          borderRadius: 12, padding: '0 24px',
-          marginBottom: 20,
-          boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-          overflow: 'hidden',
-        }}>
-          <div style={{ padding: '18px 28px 18px 0' }}>
-            <div style={{ fontSize: 24, fontWeight: 700, color: '#111827', lineHeight: 1, letterSpacing: '-0.5px' }}>
-              {users.length}
-            </div>
-            <div style={{ fontSize: 11.5, color: '#9ca3af', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 4 }}>
-              Total Users
-            </div>
-          </div>
-          <div style={{ width: 1, height: 36, background: '#e4e9f0', marginRight: 28, flexShrink: 0 }} />
-          <div style={{ padding: '18px 28px 18px 0' }}>
-            <div style={{ fontSize: 24, fontWeight: 700, color: '#2563eb', lineHeight: 1, letterSpacing: '-0.5px' }}>
-              {adminCount}
-            </div>
-            <div style={{ fontSize: 11.5, color: '#9ca3af', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 4 }}>
-              Administrators
-            </div>
-          </div>
-          <div style={{ width: 1, height: 36, background: '#e4e9f0', marginRight: 28, flexShrink: 0 }} />
-          <div style={{ padding: '18px 0' }}>
-            <div style={{ fontSize: 24, fontWeight: 700, color: '#059669', lineHeight: 1, letterSpacing: '-0.5px' }}>
-              {staffCount}
-            </div>
-            <div style={{ fontSize: 11.5, color: '#9ca3af', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: 4 }}>
-              Staff Members
-            </div>
-          </div>
-        </div>
 
         {/* Users Table */}
         <div style={{
@@ -462,11 +361,11 @@ export default function UsersClient({
           {/* Table Head */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1.2fr 110px 130px',
+            gridTemplateColumns: '1fr 1.2fr 130px',
             gap: 12, padding: '10px 20px',
             background: '#f8fafc', borderBottom: '1px solid #e4e9f0',
           }}>
-            {['Member', 'Email', 'Role', 'Joined'].map((h) => (
+            {['Member', 'Email', 'Joined'].map((h) => (
               <div key={h} style={{
                 fontSize: 11, fontWeight: 700, color: '#94a3b8',
                 textTransform: 'uppercase', letterSpacing: '0.8px',
@@ -489,16 +388,14 @@ export default function UsersClient({
           {users.map((u, i) => {
             const isMe = u.id === currentUserId
             const initials = getInitials(u.full_name, u.email)
-            const avatarBg = u.role === 'admin'
-              ? 'linear-gradient(135deg,#2563eb,#7c3aed)'
-              : 'linear-gradient(135deg,#059669,#0d9488)'
+            const avatarBg = 'linear-gradient(135deg,#2563eb,#7c3aed)'
 
             return (
               <div
                 key={u.id}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1.2fr 110px 130px',
+                  gridTemplateColumns: '1fr 1.2fr 130px',
                   gap: 12, padding: '14px 20px',
                   borderBottom: i < users.length - 1 ? '1px solid #f1f5f9' : 'none',
                   alignItems: 'center',
@@ -543,21 +440,6 @@ export default function UsersClient({
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</span>
                 </div>
 
-                {/* Role pill */}
-                <div>
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    padding: '4px 10px', borderRadius: 99,
-                    fontSize: 11.5, fontWeight: 600, textTransform: 'capitalize',
-                    ...(u.role === 'admin'
-                      ? { background: '#eff6ff', color: '#2563eb', border: '1px solid rgba(37,99,235,0.2)' }
-                      : { background: '#ecfdf5', color: '#059669', border: '1px solid rgba(5,150,105,0.2)' }
-                    )
-                  }}>
-                    {u.role === 'admin' ? <IconShield /> : <IconUserSmall />}
-                    {u.role}
-                  </span>
-                </div>
 
                 {/* Joined date */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#9ca3af', fontSize: 12.5 }}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export type InventoryItem = {
@@ -460,7 +460,7 @@ export default function InventoryClient({
   const [filterCategory, setFilterCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const handleSaved = (savedItem: InventoryItem) => {
+  const handleSaved = useCallback((savedItem: InventoryItem) => {
     setItems((prev) => {
       const exists = prev.find((i) => i.id === savedItem.id);
       if (exists) {
@@ -472,17 +472,19 @@ export default function InventoryClient({
       }
     });
     setModalItem(undefined);
-  };
+  }, []);
 
-  const filteredItems = items.filter(item => {
-    const matchesCategory = filterCategory === "All" || item.category === filterCategory;
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const filteredItems = useMemo(() => {
+    return items.filter(item => {
+      const matchesCategory = filterCategory === "All" || item.category === filterCategory;
+      const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [items, filterCategory, searchQuery]);
 
-  const lowStockItems = items.filter((i) => i.stock_quantity <= (i.min_stock_level || 5));
-  const totalValue = items.reduce((sum, i) => sum + (Number(i.stock_quantity) * Number(i.unit_cost || 0)), 0);
-  const potentialRevenue = items.reduce((sum, i) => sum + (Number(i.stock_quantity) * Number(i.unit_price || 0)), 0);
+  const lowStockItems = useMemo(() => items.filter((i) => i.stock_quantity <= (i.min_stock_level || 5)), [items]);
+  const totalValue = useMemo(() => items.reduce((sum, i) => sum + (Number(i.stock_quantity) * Number(i.unit_cost || 0)), 0), [items]);
+  const potentialRevenue = useMemo(() => items.reduce((sum, i) => sum + (Number(i.stock_quantity) * Number(i.unit_price || 0)), 0), [items]);
 
   return (
     <>

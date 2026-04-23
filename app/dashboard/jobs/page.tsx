@@ -36,7 +36,6 @@ export default async function JobsPage({
   searchParams: Promise<{
     q?: string;
     service?: string;
-    tech?: string;
     date_range?: string;
     view?: string;
     cursor_created_at?: string;
@@ -49,36 +48,16 @@ export default async function JobsPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  const role: "admin" | "staff" = profile?.role ?? "staff";
 
   const params = await searchParams;
   const q          = params.q?.trim() || "";
   const service    = params.service    || "All";
-  const tech       = params.tech       || "All";
   const date_range = params.date_range || "All";
   const view       = params.view       || "board";
-
-  // ── If the user typed a search term that includes a customer name,
-  //    resolve matching customer IDs first (uses trigram index).
-  let customerIds: string[] | null = null;
-  if (q) {
-    const { data: matchedCustomers } = await supabase
-      .from("customers")
-      .select("id")
-      .ilike("name", `%${q}%`);
-    customerIds = (matchedCustomers || []).map((c: any) => c.id);
-  }
 
   // ── Builds a Supabase query with all non-stage filters applied.
   function applyFilters(query: any) {
     if (service !== "All") query = query.eq("service_type", service);
-    if (tech    !== "All") query = query.eq("assigned_to", tech);
 
     // Date range filter
     const today = new Date();
@@ -99,13 +78,9 @@ export default async function JobsPage({
       query = query.or(`and(visit_date.gte.${mStartStr},visit_date.lte.${mEndStr}),and(job_date.gte.${mStartStr},job_date.lte.${mEndStr})`);
     }
 
-    // Text search: ac_brand / service_report_no / resolved customer IDs
+    // Text search: ac_brand / service_report_no / customer name (joined filter)
     if (q) {
-      const orParts = [`ac_brand.ilike.%${q}%`, `service_report_no.ilike.%${q}%`];
-      if (customerIds && customerIds.length > 0) {
-        orParts.push(`customer_id.in.(${customerIds.join(",")})`);
-      }
-      query = query.or(orParts.join(","));
+      query = query.or(`ac_brand.ilike.%${q}%,service_report_no.ilike.%${q}%,customers.name.ilike.%${q}%`);
     }
 
     return query;
@@ -113,6 +88,12 @@ export default async function JobsPage({
 
   let initialJobs: any[] = [];
   let hasNextPage = false;
+  let staffProfiles: { id: string; role: string; full_name?: string; email?: string }[] = [];
+
+  // Parallelize staff profiles fetch with jobs fetch
+  const profilesPromise = supabase
+    .from("profiles")
+    .select("id, role, full_name, name, email");
 
   if (view === "list") {
     // ── LIST VIEW: keyset pagination ─────────────────────────────────────────
@@ -133,44 +114,66 @@ export default async function JobsPage({
       );
     }
 
-    const { data } = await query;
-    const rows = data || [];
+    const [profilesRes, jobsRes] = await Promise.all([profilesPromise, query]);
+    
+    const rows = jobsRes.data || [];
     hasNextPage = rows.length > LIST_PAGE_SIZE;
     initialJobs = hasNextPage ? rows.slice(0, LIST_PAGE_SIZE) : rows;
+    
+    staffProfiles = (profilesRes.data || []).map((p: any) => ({
+      ...p,
+      email: p.email || "",
+    }));
   } else {
-    // ── BOARD VIEW: parallel per-stage queries, 40 per lane ──────────────────
-    const stageQueries = JOB_STAGES.map((displayStage) => {
-      const dbStage = getStageDB(displayStage);
-      let q_ = supabase
+    // ── BOARD VIEW: consolidated queries to prevent fetch queue lag ──────────────────
+    const activeStages = [
+      "Site Visit Scheduled",
+      "Quotation Sent",
+      "Job Scheduled",
+      "In Progress", // First Visit
+      "Second Visit",
+      "Job Done (Payment Pending)",
+    ];
+
+    const qActive = applyFilters(
+      supabase
         .from("jobs")
         .select(JOB_SELECT)
-        .eq("stage", dbStage)
+        .in("stage", activeStages)
         .order("created_at", { ascending: false })
-        .limit(KANBAN_PER_STAGE);
-      q_ = applyFilters(q_);
-      return q_;
-    });
+        .limit(300)
+    );
 
-    const results = await Promise.all(stageQueries);
-    initialJobs = results.flatMap((r) => r.data || []);
-  }
+    const qCompleted = applyFilters(
+      supabase
+        .from("jobs")
+        .select(JOB_SELECT)
+        .eq("stage", "Completed")
+        .order("created_at", { ascending: false })
+        .limit(KANBAN_PER_STAGE)
+    );
 
-  // ── Staff profiles (admin only) ─────────────────────────────────────────────
-  let staffProfiles: { id: string; role: string; full_name?: string; email?: string }[] = [];
-  if (role === "admin") {
-    const { createAdminClient } = await import("@/lib/supabase/admin");
-    const adminSupabase = createAdminClient();
-    const { data: profiles } = await adminSupabase
-      .from("profiles")
-      .select("id, role, full_name, name");
-    const { data: authData } = await adminSupabase.auth.admin.listUsers();
-    const emailMap = new Map<string, string>();
-    if (authData?.users) {
-      authData.users.forEach((u) => emailMap.set(u.id, u.email ?? ""));
+    const [profilesRes, activeRes, completedRes] = await Promise.all([
+      profilesPromise, 
+      qActive, 
+      qCompleted
+    ]);
+
+    const allActive = activeRes.data || [];
+    const grouped: Record<string, any[]> = {};
+    for (const job of allActive) {
+      if (!grouped[job.stage]) grouped[job.stage] = [];
+      if (grouped[job.stage].length < KANBAN_PER_STAGE) grouped[job.stage].push(job);
     }
-    staffProfiles = (profiles || []).map((p: any) => ({
+
+    initialJobs = [
+      ...Object.values(grouped).flat(),
+      ...(completedRes.data || []),
+    ];
+
+    staffProfiles = (profilesRes.data || []).map((p: any) => ({
       ...p,
-      email: emailMap.get(p.id) || "",
+      email: p.email || "",
     }));
   }
 
@@ -185,9 +188,9 @@ export default async function JobsPage({
     <JobsClient
       initialJobs={initialJobs}
       userId={user.id}
-      role={role}
+      role={"admin"}
       staffProfiles={staffProfiles}
-      initialFilters={{ q, service, tech, date_range, view }}
+      initialFilters={{ q, service, date_range, view }}
       nextCursor={nextCursor}
     />
   );

@@ -11,15 +11,6 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
 
   // Use admin client to list all auth users
   const admin = createAdminClient()
@@ -55,22 +46,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
 
   const body = await request.json()
-  const { email, password, full_name, role } = body
+  const { email, password, full_name } = body
+  const role = 'admin' // Force all users to be admin
 
-  if (!email || !password || !role) {
+  if (!email || !password) {
     return NextResponse.json(
-      { error: 'email, password and role are required.' },
+      { error: 'email and password are required.' },
       { status: 400 }
     )
   }

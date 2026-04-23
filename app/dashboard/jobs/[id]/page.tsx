@@ -47,18 +47,6 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     return notFound();
   }
 
-  // 3. Determine user role
-  let userRole = 'staff';
-  const currentUserId = authData?.user?.id;
-  if (currentUserId) {
-    const profile = staffProfiles?.find(p => p.id === currentUserId);
-    if (profile) {
-      userRole = profile.role || 'staff';
-    } else {
-      const { data: currentUserProfile } = await supabase.from('profiles').select('role').eq('id', currentUserId).single();
-      userRole = currentUserProfile?.role || 'staff';
-    }
-  }
 
   // 4. Map staff relationships in-memory (0 extra DB queries!)
   const assignedStaff = staffProfiles?.find(p => p.id === job.assigned_to) || null;
@@ -86,7 +74,6 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         initialJob={enrichedJob} 
         initialMaterials={materials || []} 
         staffProfiles={staffProfiles || []}
-        userRole={userRole}
       />
     </div>
   )

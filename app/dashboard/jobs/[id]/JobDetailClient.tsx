@@ -15,12 +15,10 @@ export default function JobDetailClient({
   initialJob,
   initialMaterials,
   staffProfiles,
-  userRole,
 }: {
   initialJob: any;
   initialMaterials: any[];
   staffProfiles: any[];
-  userRole?: string;
 }) {
   const [job, setJob] = useState(initialJob);
   const [materials, setMaterials] = useState(initialMaterials);
@@ -210,7 +208,7 @@ export default function JobDetailClient({
       await updateCustomerDetails(job.customer_id, { unit_type: (unitType as string) || null });
     }
 
-    if (userRole === "admin") {
+    {
       const ps = fd.get("payment_status");
       if (ps) {
         updates.payment_status = ps;
@@ -257,7 +255,7 @@ export default function JobDetailClient({
             </h1>
           </div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {userRole === "admin" && stageIndex >= STAGES.indexOf("Quotation Sent") && (
+            {stageIndex >= STAGES.indexOf("Quotation Sent") && (
               <>
                 <button
                   onClick={() => { setDocumentMode("quotation"); setShowInvoiceModal(true); }}
@@ -478,11 +476,11 @@ export default function JobDetailClient({
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>Visit Date</div>
-                    {isEditing && userRole === "admin" ? <input type="date" name="visit_date" defaultValue={job.visit_date} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{job.visit_date || "TBD"}</div>}
+                    {isEditing ? <input type="date" name="visit_date" defaultValue={job.visit_date} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{job.visit_date || "TBD"}</div>}
                   </div>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>Job Date</div>
-                    {isEditing && userRole === "admin" ? <input type="date" name="job_date" defaultValue={job.job_date} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{job.job_date || "TBD"}</div>}
+                    {isEditing ? <input type="date" name="job_date" defaultValue={job.job_date} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{job.job_date || "TBD"}</div>}
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -510,7 +508,7 @@ export default function JobDetailClient({
             </div>
 
             {/* Payment Card */}
-            {userRole === "admin" && (
+            {(
             <div style={{ background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", padding: 24 }}>
               <h3 style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 20 }}>Payment & Deposit</h3>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -555,7 +553,7 @@ export default function JobDetailClient({
                 <div style={{ height: 1, background: "#e2e8f0" }} />
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ fontSize: 13, color: "#64748b", fontWeight: 600 }}>Payment Status</span>
-                  {userRole === "admin" && isEditing ? (
+                  {isEditing ? (
                     <select name="payment_status" defaultValue={job.payment_status || "Pending"} className="form-input" style={{ width: 120 }}>
                       <option value="Pending">Pending</option>
                       <option value="Paid">Paid</option>

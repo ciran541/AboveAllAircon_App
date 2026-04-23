@@ -140,9 +140,13 @@ export async function transitionStage(
 
   if (error) return { error: error.message };
 
-  const { calendarError } = await syncAllCalendarEvents(jobId, supabase);
+  // Run Google Calendar sync asynchronously to avoid blocking the UI
+  syncAllCalendarEvents(jobId, supabase).catch((err) =>
+    console.error("Background calendar sync failed:", err)
+  );
+
   invalidateJobCaches();
-  return { success: true, calendarError: calendarError ?? null };
+  return { success: true, calendarError: null };
 }
 
 /**
@@ -170,9 +174,13 @@ export async function updateFields(
 
   if (error) return { error: error.message };
 
-  const { calendarError } = await syncAllCalendarEvents(jobId, supabase);
+  // Run Google Calendar sync asynchronously to avoid blocking the UI
+  syncAllCalendarEvents(jobId, supabase).catch((err) =>
+    console.error("Background calendar sync failed:", err)
+  );
+
   invalidateJobCaches();
-  return { success: true, data, calendarError: calendarError ?? null };
+  return { success: true, data, calendarError: null };
 }
 
 /**
@@ -197,10 +205,13 @@ export async function deleteJob(
     (job as any)?.second_visit_event_id,
   ].filter(Boolean) as string[];
 
-  await Promise.allSettled(eventIds.map((id) => deleteCalendarEvent(id)));
-
   const { error } = await supabase.from("jobs").delete().eq("id", jobId);
   if (error) return { error: error.message };
+
+  // Run Google Calendar sync asynchronously to avoid blocking the UI
+  Promise.allSettled(eventIds.map((id) => deleteCalendarEvent(id))).catch((err) =>
+    console.error("Background calendar sync failed:", err)
+  );
 
   invalidateJobCaches();
   return { success: true };
@@ -249,36 +260,37 @@ export async function saveJob(
     }
 
     const payload = { ...dataToSave, customer_id: finalCustomerId };
-    let savedJobId: string;
+    let fullJob: any;
+
+    const JOB_SELECT_FULL = "id, stage, service_type, ac_brand, unit_count, visit_date, visit_time, job_date, job_time, second_visit_date, second_visit_time, payment_status, notes, labor_cost, quoted_amount, material_cost, priority, source, service_report_no, internal_notes, quoted_date, expiry_date, status, loss_reason, closed_at, created_at, deposit_amount, deposit_collected, cv_redeemed, cv_amount, final_payment_collected, quotation_breakdown, quotation_materials, quotation_warranty, engineer_name, visit_event_id, job_event_id, second_visit_event_id, customer_id, created_by, assigned_to, customers(id, name, phone, address, unit_type)";
 
     if (!payload.id) {
       const { data, error: insertError } = await supabase
         .from("jobs")
         .insert([payload])
-        .select("id")
+        .select(JOB_SELECT_FULL)
         .single();
       if (insertError) return { error: insertError.message };
-      savedJobId = data.id;
+      fullJob = data;
     } else {
       const { id, ...updatePayload } = payload;
-      const { error: updateError } = await supabase
+      const { data, error: updateError } = await supabase
         .from("jobs")
         .update(updatePayload)
-        .eq("id", id);
+        .eq("id", id)
+        .select(JOB_SELECT_FULL)
+        .single();
       if (updateError) return { error: updateError.message };
-      savedJobId = id;
+      fullJob = data;
     }
 
-    const { calendarError } = await syncAllCalendarEvents(savedJobId, supabase);
-
-    const { data: fullJob } = await supabase
-      .from("jobs")
-      .select("id, stage, service_type, ac_brand, unit_count, visit_date, visit_time, job_date, job_time, second_visit_date, second_visit_time, payment_status, notes, labor_cost, quoted_amount, material_cost, priority, source, service_report_no, internal_notes, quoted_date, expiry_date, status, loss_reason, closed_at, created_at, deposit_amount, deposit_collected, cv_redeemed, cv_amount, final_payment_collected, quotation_breakdown, quotation_materials, quotation_warranty, engineer_name, visit_event_id, job_event_id, second_visit_event_id, customer_id, created_by, assigned_to, customers(id, name, phone, address, unit_type)")
-      .eq("id", savedJobId)
-      .single();
+    // Run Google Calendar sync asynchronously to avoid blocking the UI
+    syncAllCalendarEvents(fullJob.id, supabase).catch((err) =>
+      console.error("Background calendar sync failed:", err)
+    );
 
     invalidateJobCaches();
-    return { success: true, savedJob: fullJob, calendarError: calendarError ?? null };
+    return { success: true, savedJob: fullJob, calendarError: null };
   } catch (err: any) {
     return { error: err.message };
   }

@@ -16,19 +16,18 @@ export default async function DashboardLayout({
 
   const email = user.email ?? ''
 
-  // Fetch role + full name from profiles table
+  // Fetch full name from profiles table
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, full_name')
+    .select('full_name')
     .eq('id', user.id)
     .single()
 
-  const role = profile?.role ?? 'staff'
   const fullName = profile?.full_name ?? ''
 
   return (
     <div className="dashboard-shell">
-      <Sidebar email={email} role={role} fullName={fullName} />
+      <Sidebar email={email} fullName={fullName} />
       <div className="dashboard-main">
         {children}
       </div>

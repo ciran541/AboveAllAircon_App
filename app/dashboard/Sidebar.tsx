@@ -3,10 +3,10 @@
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import Image from 'next/image'
 
 interface SidebarProps {
   email: string
-  role: string
   fullName?: string
 }
 
@@ -79,7 +79,6 @@ type NavItem = {
   href: string
   label: string
   icon: React.ReactNode
-  adminOnly?: boolean
 }
 
 function IconInventory() {
@@ -92,18 +91,12 @@ function IconInventory() {
   )
 }
 
-function getNavItems(role: string): NavItem[] {
-  const items: NavItem[] = [
-    { href: '/dashboard', label: 'Dashboard', icon: <IconDashboard /> },
-    { href: '/dashboard/jobs', label: 'Jobs', icon: <IconJobs /> },
-    { href: '/dashboard/customers', label: 'Customers', icon: <IconUsers /> },
-  ]
-  if (role === 'admin') {
-    items.push({ href: '/dashboard/inventory', label: 'Inventory', icon: <IconInventory />, adminOnly: true })
-    items.push({ href: '/dashboard/users', label: 'Team', icon: <IconTeam />, adminOnly: true })
-  }
-  return items
-}
+const NAV_ITEMS: NavItem[] = [
+  { href: '/dashboard', label: 'Dashboard', icon: <IconDashboard /> },
+  { href: '/dashboard/jobs', label: 'Jobs', icon: <IconJobs /> },
+  { href: '/dashboard/customers', label: 'Customers', icon: <IconUsers /> },
+  { href: '/dashboard/inventory', label: 'Inventory', icon: <IconInventory /> },
+]
 
 function getInitials(name: string, email: string) {
   if (name && name.trim()) {
@@ -115,10 +108,10 @@ function getInitials(name: string, email: string) {
   return email.substring(0, 2).toUpperCase()
 }
 
-export default function Sidebar({ email, role, fullName = '' }: SidebarProps) {
+export default function Sidebar({ email, fullName = '' }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const navItems = getNavItems(role)
+  const navItems = NAV_ITEMS
   const initials = getInitials(fullName, email)
 
   async function handleLogout() {
@@ -133,7 +126,14 @@ export default function Sidebar({ email, role, fullName = '' }: SidebarProps) {
       {/* Logo */}
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <img src="https://theloanconnection.com.sg/wp-content/uploads/2025/09/Above_all_aircon_logo-e1758263757872.png" alt="Above All Aircon" />
+          <Image 
+            src="/logo.png" 
+            alt="Above All Aircon" 
+            width={160} 
+            height={48} 
+            priority
+            style={{ objectFit: 'contain' }}
+          />
         </div>
       </div>
 
@@ -154,7 +154,7 @@ export default function Sidebar({ email, role, fullName = '' }: SidebarProps) {
             >
               <span className="nav-item-icon">{item.icon}</span>
               <span>{item.label}</span>
-              {item.adminOnly && <span className="nav-item-admin-dot" />}
+
             </Link>
           )
         })}
@@ -168,7 +168,7 @@ export default function Sidebar({ email, role, fullName = '' }: SidebarProps) {
             <div className="user-name" title={fullName || email}>
               {fullName || email}
             </div>
-            <div className="user-role-label">{role}</div>
+            <div className="user-role-label">Admin</div>
           </div>
         </div>
         <button id="logout-btn" className="btn-logout" onClick={handleLogout}>

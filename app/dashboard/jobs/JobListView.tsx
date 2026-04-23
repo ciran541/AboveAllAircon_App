@@ -23,7 +23,6 @@ export default function JobListView({
             <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Customer</th>
             <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Job Detail</th>
             <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Stage</th>
-            <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Technician</th>
             <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', textAlign: 'right' }}>Billing</th>
             <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Scheduled Date</th>
           </tr>
@@ -31,7 +30,7 @@ export default function JobListView({
         <tbody>
           {jobs.length === 0 ? (
             <tr>
-              <td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
+              <td colSpan={5} style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
                 No jobs found matching your filters.
               </td>
             </tr>
@@ -71,14 +70,6 @@ export default function JobListView({
                     }}>
                       {getStageDisplay(job.stage)}
                     </span>
-                  </td>
-                  <td style={{ padding: '14px 20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#64748b' }}>
-                        {(staffName[0] || 'U').toUpperCase()}
-                      </div>
-                      <span style={{ fontSize: '13px', color: '#334155' }}>{staffName}</span>
-                    </div>
                   </td>
                   <td style={{ padding: '14px 20px', textAlign: 'right' }}>
                     <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>

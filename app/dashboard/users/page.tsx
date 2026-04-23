@@ -11,15 +11,6 @@ export default async function UsersPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Role check — staff cannot access this page
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  if (profile?.role !== 'admin') redirect('/dashboard')
-
   // Fetch users via admin client
   const admin = createAdminClient()
   const { data: authData } = await admin.auth.admin.listUsers()
