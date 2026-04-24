@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { upsertCalendarEvent, deleteCalendarEvent } from "@/lib/googleCalendar";
 import { getStageDB } from "@/lib/constants";
+import { logJobToSheets } from "@/lib/sheetsBackup";
 
 /** Invalidates all cached job data for a specific user + the admin dashboard. */
 function invalidateJobCaches(userId?: string) {
@@ -133,17 +134,22 @@ export async function transitionStage(
   const supabase = await createClient();
   const dbStage = getStageDB(targetStage);
 
-  const { error } = await supabase
+  const { data: updatedJob, error } = await supabase
     .from("jobs")
     .update({ stage: dbStage, ...updates })
-    .eq("id", jobId);
+    .eq("id", jobId)
+    .select("*, customers(id, name, phone, address, unit_type)")
+    .single();
 
   if (error) return { error: error.message };
 
-  // Run Google Calendar sync asynchronously to avoid blocking the UI
+  // Background: Google Calendar sync
   syncAllCalendarEvents(jobId, supabase).catch((err) =>
     console.error("Background calendar sync failed:", err)
   );
+
+  // Background: Google Sheets backup (fire-and-forget)
+  logJobToSheets(updatedJob);
 
   invalidateJobCaches();
   return { success: true, calendarError: null };
@@ -169,15 +175,18 @@ export async function updateFields(
     .from("jobs")
     .update(updates)
     .eq("id", jobId)
-    .select()
+    .select("*, customers(id, name, phone, address, unit_type)")
     .single();
 
   if (error) return { error: error.message };
 
-  // Run Google Calendar sync asynchronously to avoid blocking the UI
+  // Background: Google Calendar sync
   syncAllCalendarEvents(jobId, supabase).catch((err) =>
     console.error("Background calendar sync failed:", err)
   );
+
+  // Background: Google Sheets backup (fire-and-forget)
+  logJobToSheets(data);
 
   invalidateJobCaches();
   return { success: true, data, calendarError: null };
@@ -284,10 +293,13 @@ export async function saveJob(
       fullJob = data;
     }
 
-    // Run Google Calendar sync asynchronously to avoid blocking the UI
+    // Background: Google Calendar sync
     syncAllCalendarEvents(fullJob.id, supabase).catch((err) =>
       console.error("Background calendar sync failed:", err)
     );
+
+    // Background: Google Sheets backup (fire-and-forget)
+    logJobToSheets(fullJob);
 
     invalidateJobCaches();
     return { success: true, savedJob: fullJob, calendarError: null };

@@ -36,7 +36,7 @@ export default async function JobsPage({
   searchParams: Promise<{
     q?: string;
     service?: string;
-    date_range?: string;
+    stage?: string;
     view?: string;
     cursor_created_at?: string;
     cursor_id?: string;
@@ -44,32 +44,18 @@ export default async function JobsPage({
 }) {
   const supabase = await createClient();
   const params = await searchParams;
-  const q          = params.q?.trim() || "";
-  const service    = params.service    || "All";
-  const date_range = params.date_range || "All";
-  const view       = params.view       || "board";
+  const q       = params.q?.trim() || "";
+  const service = params.service || "All";
+  const stage   = params.stage   || "All";
+  const view    = params.view    || "board";
 
-  // ── Builds a Supabase query with all non-stage filters applied.
+  // ── Builds a Supabase query with all filters applied.
   function applyFilters(query: any) {
     if (service !== "All") query = query.eq("service_type", service);
-
-    // Date range filter
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split("T")[0];
-    if (date_range === "Today") {
-      query = query.or(`visit_date.eq.${todayStr},job_date.eq.${todayStr}`);
-    } else if (date_range === "This Week") {
-      const next7 = new Date(today);
-      next7.setDate(today.getDate() + 7);
-      const next7Str = next7.toISOString().split("T")[0];
-      query = query.or(`and(visit_date.gte.${todayStr},visit_date.lte.${next7Str}),and(job_date.gte.${todayStr},job_date.lte.${next7Str})`);
-    } else if (date_range === "This Month") {
-      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-      const monthEnd   = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      const mStartStr  = monthStart.toISOString().split("T")[0];
-      const mEndStr    = monthEnd.toISOString().split("T")[0];
-      query = query.or(`and(visit_date.gte.${mStartStr},visit_date.lte.${mEndStr}),and(job_date.gte.${mStartStr},job_date.lte.${mEndStr})`);
+    
+    if (stage !== "All") {
+      const dbStage = getStageDB(stage);
+      query = query.eq("stage", dbStage);
     }
 
     // Text search: ac_brand / service_report_no / customer name (joined filter)
@@ -114,11 +100,25 @@ export default async function JobsPage({
     initialJobs = hasNextPage ? rows.slice(0, LIST_PAGE_SIZE) : rows;
     staffProfiles = (profilesRes.data || []).map((p: any) => ({ ...p, email: p.email || "" }));
   } else {
-    const activeStages = ["Site Visit Scheduled", "Quotation Sent", "Job Scheduled", "In Progress", "Second Visit", "Job Done (Payment Pending)"];
-    const qActive = applyFilters(supabase.from("jobs").select(JOB_SELECT).in("stage", activeStages).order("created_at", { ascending: false }).limit(300));
-    const qCompleted = applyFilters(supabase.from("jobs").select(JOB_SELECT).eq("stage", "Completed").order("created_at", { ascending: false }).limit(KANBAN_PER_STAGE));
+    // Pipeline view - we fetch active stages, but if a specific stage filter is active, we might narrow it down
+    let activeStages = ["Site Visit Scheduled", "Quotation Sent", "Job Scheduled", "In Progress", "Second Visit", "Job Done (Payment Pending)"];
+    
+    // If a stage filter is active, only show that stage
+    if (stage !== "All") {
+      activeStages = [getStageDB(stage)];
+    }
 
-    const [userRes, profilesRes, activeRes, completedRes] = await Promise.all([userPromise, profilesPromise, qActive, qCompleted]);
+    const qActive = applyFilters(supabase.from("jobs").select(JOB_SELECT).in("stage", activeStages).order("created_at", { ascending: false }).limit(300));
+    const qCompleted = stage === "All" || stage === "Completed" 
+      ? applyFilters(supabase.from("jobs").select(JOB_SELECT).eq("stage", "Completed").order("created_at", { ascending: false }).limit(KANBAN_PER_STAGE))
+      : null;
+
+    const [userRes, profilesRes, activeRes, completedRes] = await Promise.all([
+      userPromise, 
+      profilesPromise, 
+      qActive, 
+      qCompleted || Promise.resolve({ data: [] })
+    ]);
 
     if (!userRes.data.user) redirect("/login");
 
@@ -150,7 +150,7 @@ export default async function JobsPage({
       userId={userId}
       role={"admin"}
       staffProfiles={staffProfiles}
-      initialFilters={{ q, service, date_range, view }}
+      initialFilters={{ q, service, stage, view }}
       nextCursor={nextCursor}
     />
   );

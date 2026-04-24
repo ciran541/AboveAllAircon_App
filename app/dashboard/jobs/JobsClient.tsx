@@ -78,7 +78,7 @@ export default function JobsClient({
   userId: string;
   role: "admin" | "staff";
   staffProfiles: { id: string; role: string; full_name?: string; email?: string }[];
-  initialFilters: { q: string; service: string; date_range: string; view: string };
+  initialFilters: { q: string; service: string; stage: string; view: string };
   nextCursor: { created_at: string; id: string } | null;
 }) {
   const router = useRouter();
@@ -96,7 +96,7 @@ export default function JobsClient({
   // URL-driven filter state (initialised from server-side searchParams)
   const [searchTermRaw, setSearchTermRaw] = useState(initialFilters.q);
   const [serviceTypeFilter, setServiceTypeFilter] = useState(initialFilters.service);
-  const [dateFilter, setDateFilter] = useState(initialFilters.date_range);
+  const [stageFilter, setStageFilter] = useState(initialFilters.stage);
   const [viewMode, setViewMode] = useState<"board" | "list">(initialFilters.view === "list" ? "list" : "board");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -120,15 +120,15 @@ export default function JobsClient({
     const sp = new URLSearchParams({
       q:          searchTermRaw,
       service:    serviceTypeFilter,
-      date_range: dateFilter,
+      stage:      stageFilter,
       view:       viewMode,
       ...overrides,
     });
     // Strip defaults to keep URLs clean
-    ["q", "service", "date_range"].forEach(k => { if (sp.get(k) === "All" || sp.get(k) === "") sp.delete(k); });
+    ["q", "service", "stage"].forEach(k => { if (sp.get(k) === "All" || sp.get(k) === "") sp.delete(k); });
     if (sp.get("view") === "board") sp.delete("view");
     router.push(`${pathname}?${sp.toString()}`);
-  }, [searchTermRaw, serviceTypeFilter, dateFilter, viewMode, pathname, router]);
+  }, [searchTermRaw, serviceTypeFilter, stageFilter, viewMode, pathname, router]);
 
   // Debounced search — waits 300ms after typing stops before pushing to URL
   const setSearchTerm = useCallback((val: string) => {
@@ -139,26 +139,6 @@ export default function JobsClient({
 
   // Keep jobs in sync when server sends fresh data (after navigation)
   useEffect(() => { setJobs(initialJobs); }, [initialJobs]);
-
-  const isWithinRange = (dateStr: string | null, range: string) => {
-    if (!dateStr || range === "All") return true;
-    const date = new Date(dateStr);
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    if (range === "Today") {
-      const target = new Date(date);
-      target.setHours(0, 0, 0, 0);
-      return target.getTime() === now.getTime();
-    }
-    if (range === "This Week") {
-      const diff = now.getTime() - date.getTime();
-      return diff <= 7 * 24 * 60 * 60 * 1000 && diff >= 0;
-    }
-    if (range === "This Month") {
-      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-    }
-    return true;
-  };
 
   const normalizeStage = getStageDisplay;
 
@@ -339,7 +319,7 @@ export default function JobsClient({
                 Jobs Pipeline {isFullscreen && <span style={{ fontSize: 11, background: "#f1f5f9", color: "#64748b", padding: "2px 8px", borderRadius: 4, verticalAlign: "middle", marginLeft: 8 }}>FULLSCREEN</span>}
               </h1>
               <p style={{ fontSize: 12.5, color: "#64748b", marginTop: 2 }}>
-                {filteredJobs.length} {filteredJobs.length === 1 ? "job" : "jobs"} visible {searchTerm || serviceTypeFilter !== "All" || dateFilter !== "All" ? "(filtered)" : ""}
+                {filteredJobs.length} {filteredJobs.length === 1 ? "job" : "jobs"} visible {searchTerm || serviceTypeFilter !== "All" || stageFilter !== "All" ? "(filtered)" : ""}
               </p>
             </div>
           </div>
@@ -392,15 +372,15 @@ export default function JobsClient({
             <option value="Installation">Installation</option>
           </select>
 
-          <select value={dateFilter} onChange={(e) => { setDateFilter(e.target.value); pushFilters({ date_range: e.target.value }); }}
+          <select value={stageFilter} onChange={(e) => { setStageFilter(e.target.value); pushFilters({ stage: e.target.value }); }}
             style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13.5, background: "#fff" }}>
-            <option value="All">Any Time</option>
-            <option value="Today">Today</option>
-            <option value="This Week">Next 7 Days</option>
-            <option value="This Month">This Month</option>
+            <option value="All">All Stages</option>
+            {STAGES.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
           </select>
-          {(searchTerm || serviceTypeFilter !== "All" || dateFilter !== "All") && (
-            <button onClick={() => { setSearchTermRaw(""); setServiceTypeFilter("All"); setDateFilter("All"); pushFilters({ q: "", service: "All", date_range: "All" }); }}
+          {(searchTerm || serviceTypeFilter !== "All" || stageFilter !== "All") && (
+            <button onClick={() => { setSearchTermRaw(""); setServiceTypeFilter("All"); setStageFilter("All"); pushFilters({ q: "", service: "All", stage: "All" }); }}
               style={{ background: "none", border: "none", color: "#3b82f6", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
               Clear
             </button>
@@ -439,7 +419,8 @@ export default function JobsClient({
                   onClick={() => {
                     const sp = new URLSearchParams({
                       q: searchTerm, service: serviceTypeFilter,
-                      date_range: dateFilter, view: "list",
+                      stage: stageFilter,
+                      view: "list",
                       cursor_created_at: nextCursor.created_at,
                       cursor_id: nextCursor.id,
                     });

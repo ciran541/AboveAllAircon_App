@@ -20,11 +20,11 @@ export default function JobListView({
       <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
         <thead>
           <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-            <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Customer</th>
-            <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Job Detail</th>
-            <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Stage</th>
-            <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', textAlign: 'right' }}>Billing</th>
-            <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Scheduled Date</th>
+            <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', width: '25%' }}>Customer</th>
+            <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', width: '25%' }}>Job Detail</th>
+            <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', width: '180px' }}>Stage</th>
+            <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', textAlign: 'right', width: '140px' }}>Billing</th>
+            <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', width: '160px' }}>Scheduled Date</th>
           </tr>
         </thead>
         <tbody>
