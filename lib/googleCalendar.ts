@@ -162,8 +162,27 @@ function buildEventPayload(params: UpsertParams): CalendarEventPayload {
 export async function upsertCalendarEvent(params: UpsertParams): Promise<{ eventId: string }> {
   const calendarId = encodeURIComponent(getRequiredEnv("GOOGLE_CALENDAR_ID"));
   const token = await getAccessToken();
-  const payload = buildEventPayload(params);
+  return _upsertWithToken(token, calendarId, params);
+}
 
+/**
+ * Deletes a calendar event by its event ID. Safe to call even if the event no longer exists.
+ */
+export async function deleteCalendarEvent(eventId: string): Promise<void> {
+  if (!eventId) return;
+  const calendarId = encodeURIComponent(getRequiredEnv("GOOGLE_CALENDAR_ID"));
+  const token = await getAccessToken();
+  await _deleteWithToken(token, calendarId, eventId);
+}
+
+// ── Internal token-reusing helpers ────────────────────────────────────────────
+
+async function _upsertWithToken(
+  token: string,
+  calendarId: string,
+  params: UpsertParams
+): Promise<{ eventId: string }> {
+  const payload = buildEventPayload(params);
   const method = params.existingEventId ? "PATCH" : "POST";
   const eventPath = params.existingEventId
     ? `/calendars/${calendarId}/events/${encodeURIComponent(params.existingEventId)}`
@@ -189,15 +208,11 @@ export async function upsertCalendarEvent(params: UpsertParams): Promise<{ event
   return { eventId: data.id };
 }
 
-/**
- * Deletes a calendar event by its event ID. Safe to call even if the event no longer exists.
- */
-export async function deleteCalendarEvent(eventId: string): Promise<void> {
-  if (!eventId) return;
-
-  const calendarId = encodeURIComponent(getRequiredEnv("GOOGLE_CALENDAR_ID"));
-  const token = await getAccessToken();
-
+async function _deleteWithToken(
+  token: string,
+  calendarId: string,
+  eventId: string
+): Promise<void> {
   const response = await fetch(
     `${CALENDAR_API_BASE}/calendars/${calendarId}/events/${encodeURIComponent(eventId)}`,
     {
@@ -206,10 +221,55 @@ export async function deleteCalendarEvent(eventId: string): Promise<void> {
       cache: "no-store",
     }
   );
-
   // 404 means it's already gone — that's fine
   if (!response.ok && response.status !== 404) {
     const errorText = await response.text();
     throw new Error(`Google Calendar delete failed: ${response.status} ${errorText}`);
   }
+}
+
+// ── Batch API (single token, parallel operations) ─────────────────────────────
+
+export type BatchUpsertEntry = UpsertParams & { col: string };
+
+/**
+ * Fetches a single auth token then runs all upsert/delete operations in parallel.
+ * Returns a map of { col -> eventId | null } for the caller to persist,
+ * and an array of error strings for any failed operations.
+ */
+export async function batchSyncCalendarEvents(ops: {
+  upserts: (UpsertParams & { col: string })[];
+  deletes: { eventId: string; col: string }[];
+}): Promise<{
+  saved: Record<string, string>;   // col -> new eventId
+  cleared: string[];               // col names to set null
+  errors: string[];
+}> {
+  const calendarId = encodeURIComponent(getRequiredEnv("GOOGLE_CALENDAR_ID"));
+  const token = await getAccessToken();
+
+  const saved: Record<string, string> = {};
+  const cleared: string[] = [];
+  const errors: string[] = [];
+
+  await Promise.all([
+    ...ops.upserts.map(async ({ col, ...params }) => {
+      try {
+        const { eventId } = await _upsertWithToken(token, calendarId, params);
+        saved[col] = eventId;
+      } catch (err: any) {
+        errors.push(`[${params.type}] ${err.message}`);
+      }
+    }),
+    ...ops.deletes.map(async ({ eventId, col }) => {
+      try {
+        await _deleteWithToken(token, calendarId, eventId);
+        cleared.push(col);
+      } catch (err: any) {
+        errors.push(`[delete:${col}] ${err.message}`);
+      }
+    }),
+  ]);
+
+  return { saved, cleared, errors };
 }

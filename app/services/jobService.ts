@@ -8,7 +8,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { upsertCalendarEvent, deleteCalendarEvent } from "@/lib/googleCalendar";
+import { batchSyncCalendarEvents, deleteCalendarEvent } from "@/lib/googleCalendar";
 import { getStageDB } from "@/lib/constants";
 import { logJobToSheets } from "@/lib/sheetsBackup";
 
@@ -88,32 +88,34 @@ async function syncAllCalendarEvents(
     },
   ];
 
-  const errors: string[] = [];
+  // Build upsert / delete lists
+  const upserts = schedule
+    .filter((s) => s.date)
+    .map((s) => ({
+      type: s.type,
+      job: jobBase,
+      date: s.date!,
+      time: s.time ?? null,
+      existingEventId: s.existingId,
+      col: s.col,
+    }));
 
-  for (const s of schedule) {
-    try {
-      if (s.date) {
-        const { eventId } = await upsertCalendarEvent({
-          type: s.type,
-          job: jobBase,
-          date: s.date,
-          time: s.time ?? null,
-          existingEventId: s.existingId,
-        });
-        await supabase
-          .from("jobs")
-          .update({ [s.col]: eventId })
-          .eq("id", jobId);
-      } else if (s.existingId) {
-        await deleteCalendarEvent(s.existingId);
-        await supabase
-          .from("jobs")
-          .update({ [s.col]: null })
-          .eq("id", jobId);
-      }
-    } catch (err: any) {
-      errors.push(`[${s.type}] ${err.message}`);
-    }
+  const deletes = schedule
+    .filter((s) => !s.date && s.existingId)
+    .map((s) => ({ eventId: s.existingId!, col: s.col }));
+
+  if (upserts.length === 0 && deletes.length === 0) return {};
+
+  // Single token fetch, all operations in parallel
+  const { saved, cleared, errors } = await batchSyncCalendarEvents({ upserts, deletes });
+
+  // Persist all updated event IDs in one DB call
+  const dbUpdate: Record<string, string | null> = {};
+  for (const [col, eventId] of Object.entries(saved)) dbUpdate[col] = eventId;
+  for (const col of cleared) dbUpdate[col] = null;
+
+  if (Object.keys(dbUpdate).length > 0) {
+    await supabase.from("jobs").update(dbUpdate).eq("id", jobId);
   }
 
   return errors.length > 0 ? { calendarError: errors.join(" | ") } : {};
@@ -143,16 +145,15 @@ export async function transitionStage(
 
   if (error) return { error: error.message };
 
-  // Background: Google Calendar sync
-  syncAllCalendarEvents(jobId, supabase).catch((err) =>
-    console.error("Background calendar sync failed:", err)
-  );
+  // Await calendar sync — must complete before function returns on Vercel serverless
+  // (un-awaited promises are killed when the function exits, causing duplicate events)
+  const { calendarError } = await syncAllCalendarEvents(jobId, supabase);
 
-  // Background: Google Sheets backup (fire-and-forget)
+  // Google Sheets backup — void return, handles its own errors internally
   logJobToSheets(updatedJob);
 
   invalidateJobCaches();
-  return { success: true, calendarError: null };
+  return { success: true, calendarError: calendarError ?? null };
 }
 
 /**
@@ -180,16 +181,14 @@ export async function updateFields(
 
   if (error) return { error: error.message };
 
-  // Background: Google Calendar sync
-  syncAllCalendarEvents(jobId, supabase).catch((err) =>
-    console.error("Background calendar sync failed:", err)
-  );
+  // Await calendar sync — must complete before function returns on Vercel serverless
+  const { calendarError } = await syncAllCalendarEvents(jobId, supabase);
 
-  // Background: Google Sheets backup (fire-and-forget)
+  // Google Sheets backup — void return, handles its own errors internally
   logJobToSheets(data);
 
   invalidateJobCaches();
-  return { success: true, data, calendarError: null };
+  return { success: true, data, calendarError: calendarError ?? null };
 }
 
 /**
@@ -217,10 +216,9 @@ export async function deleteJob(
   const { error } = await supabase.from("jobs").delete().eq("id", jobId);
   if (error) return { error: error.message };
 
-  // Run Google Calendar sync asynchronously to avoid blocking the UI
-  Promise.allSettled(eventIds.map((id) => deleteCalendarEvent(id))).catch((err) =>
-    console.error("Background calendar sync failed:", err)
-  );
+  // Await all calendar deletions — must complete before returning on Vercel serverless
+  // (un-awaited promises are killed when the function exits, leaving orphaned calendar events)
+  await Promise.allSettled(eventIds.map((id) => deleteCalendarEvent(id)));
 
   invalidateJobCaches();
   return { success: true };
@@ -293,16 +291,14 @@ export async function saveJob(
       fullJob = data;
     }
 
-    // Background: Google Calendar sync
-    syncAllCalendarEvents(fullJob.id, supabase).catch((err) =>
-      console.error("Background calendar sync failed:", err)
-    );
+    // Await calendar sync — must complete before function returns on Vercel serverless
+    const { calendarError } = await syncAllCalendarEvents(fullJob.id, supabase);
 
-    // Background: Google Sheets backup (fire-and-forget)
+    // Google Sheets backup — void return, handles its own errors internally
     logJobToSheets(fullJob);
 
     invalidateJobCaches();
-    return { success: true, savedJob: fullJob, calendarError: null };
+    return { success: true, savedJob: fullJob, calendarError: calendarError ?? null };
   } catch (err: any) {
     return { error: err.message };
   }
