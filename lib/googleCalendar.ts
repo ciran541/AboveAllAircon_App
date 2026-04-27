@@ -21,6 +21,7 @@ type UpsertParams = {
   date: string;              // YYYY-MM-DD
   time: string | null;       // HH:MM or null
   existingEventId?: string | null;
+  customId?: string;         // Deterministic ID (base32hex, 5-1024 chars)
 };
 
 type CalendarEventPayload = {
@@ -183,9 +184,12 @@ async function _upsertWithToken(
   params: UpsertParams
 ): Promise<{ eventId: string }> {
   const payload = buildEventPayload(params);
-  const method = params.existingEventId ? "PATCH" : "POST";
-  const eventPath = params.existingEventId
-    ? `/calendars/${calendarId}/events/${encodeURIComponent(params.existingEventId)}`
+  
+  // Use customId if provided, otherwise use existingEventId, otherwise POST new
+  const effectiveId = params.customId || params.existingEventId;
+  const method = effectiveId ? "PUT" : "POST";
+  const eventPath = effectiveId
+    ? `/calendars/${calendarId}/events/${encodeURIComponent(effectiveId)}`
     : `/calendars/${calendarId}/events`;
 
   const response = await fetch(`${CALENDAR_API_BASE}${eventPath}`, {
@@ -272,4 +276,18 @@ export async function batchSyncCalendarEvents(ops: {
   ]);
 
   return { saved, cleared, errors };
+}
+
+/**
+ * Generates a valid Google Calendar Event ID from a UUID and a prefix.
+ * Google requires [a-v0-9] (base32hex). UUIDs (hex) are a subset and valid.
+ */
+export function generateDeterministicId(jobId: string, type: CalendarEventType): string {
+  const cleanId = jobId.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const prefixMap: Record<CalendarEventType, string> = {
+    site_visit: "sv",
+    job: "jb",
+    second_visit: "v2",
+  };
+  return `${prefixMap[type]}${cleanId}`;
 }
