@@ -62,6 +62,20 @@ export default function JobDetailClient({
     }
   }, [job.stage]);
 
+  // ── Helpers ───────────────────────────────────────────────
+  const formatTime12h = (timeStr: string | null) => {
+    if (!timeStr) return "TBD";
+    // Check if it's already in 12h format
+    if (timeStr.toLowerCase().includes("am") || timeStr.toLowerCase().includes("pm")) return timeStr;
+    const [hours, minutes] = timeStr.split(":");
+    const h = parseInt(hours);
+    const m = parseInt(minutes);
+    if (isNaN(h) || isNaN(m)) return timeStr;
+    const ampm = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
+  };
+
   // ── Stage advance ──────────────────────────────────────────
   const advanceStage = async (newStage: string, extraFields?: Record<string, any>) => {
     const dbStage = getStageDB(newStage);
@@ -196,7 +210,11 @@ export default function JobDetailClient({
     if (fd.has("quoted_amount")) updates.quoted_amount = parseFloat(fd.get("quoted_amount") as string) || 0;
     if (fd.has("deposit_collected")) updates.deposit_collected = parseFloat(fd.get("deposit_collected") as string) || 0;
     if (fd.has("visit_date")) updates.visit_date = fd.get("visit_date") || null;
+    if (fd.has("visit_time")) updates.visit_time = fd.get("visit_time") || null;
     if (fd.has("job_date")) updates.job_date = fd.get("job_date") || null;
+    if (fd.has("job_time")) updates.job_time = fd.get("job_time") || null;
+    if (fd.has("second_visit_date")) updates.second_visit_date = fd.get("second_visit_date") || null;
+    if (fd.has("second_visit_time")) updates.second_visit_time = fd.get("second_visit_time") || null;
     if (fd.has("cv_redeemed")) updates.cv_redeemed = fd.get("cv_redeemed") === "on";
     else if (isEditing) updates.cv_redeemed = false;
     if (fd.has("cv_amount")) updates.cv_amount = parseFloat(fd.get("cv_amount") as string) || 0;
@@ -472,36 +490,59 @@ export default function JobDetailClient({
             {/* Visit Schedule Card */}
             <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", padding: 24 }}>
               <h3 style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 20 }}>Visit Schedule</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>Visit Date</div>
-                    {isEditing ? <input type="date" name="visit_date" defaultValue={job.visit_date} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{job.visit_date || "TBD"}</div>}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>Job Date</div>
-                    {isEditing ? <input type="date" name="job_date" defaultValue={job.job_date} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{job.job_date || "TBD"}</div>}
+              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                
+                {/* 1. Site Visit */}
+                <div style={{ borderLeft: "3px solid #7c3aed", paddingLeft: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", textTransform: "uppercase", marginBottom: 6 }}>Site Survey</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Date</div>
+                      {isEditing ? <input type="date" name="visit_date" defaultValue={job.visit_date} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{job.visit_date || "TBD"}</div>}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Time</div>
+                      {isEditing ? <input type="time" name="visit_time" defaultValue={job.visit_time} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{formatTime12h(job.visit_time)}</div>}
+                    </div>
                   </div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  {job.visit_time && (
-                    <div style={{ paddingTop: 8 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Visit Time</div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{job.visit_time}</div>
-                    </div>
-                  )}
-                  {job.job_time && (
-                    <div style={{ paddingTop: 8 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Job Time</div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{job.job_time}</div>
-                    </div>
-                  )}
-                </div>
-                {job.visit_phone && (
 
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Visit Contact</div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{job.visit_phone}</div>
+                {/* 2. Installation Job */}
+                <div style={{ borderLeft: "3px solid #2563eb", paddingLeft: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#2563eb", textTransform: "uppercase", marginBottom: 6 }}>Installation Job</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Date</div>
+                      {isEditing ? <input type="date" name="job_date" defaultValue={job.job_date} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{job.job_date || "TBD"}</div>}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Time</div>
+                      {isEditing ? <input type="time" name="job_time" defaultValue={job.job_time} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{formatTime12h(job.job_time)}</div>}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Second Visit */}
+                {(job.second_visit_date || isEditing) && (
+                  <div style={{ borderLeft: "3px solid #059669", paddingLeft: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#059669", textTransform: "uppercase", marginBottom: 6 }}>Second Visit</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Date</div>
+                        {isEditing ? <input type="date" name="second_visit_date" defaultValue={job.second_visit_date} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{job.second_visit_date || "TBD"}</div>}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Time</div>
+                        {isEditing ? <input type="time" name="second_visit_time" defaultValue={job.second_visit_time} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{formatTime12h(job.second_visit_time)}</div>}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {job.visit_phone && !isEditing && (
+                  <div style={{ marginTop: 4, padding: "10px 14px", background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0" }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 2 }}>Contact Phone for Visits</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#475569" }}>{job.visit_phone}</div>
                   </div>
                 )}
               </div>

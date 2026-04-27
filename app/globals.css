@@ -324,53 +324,6 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   gap: 8px;
 }
 
-/* ─── Auth tabs ──────────────────────────────────────────────────────────── */
-.auth-tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 24px;
-  background: var(--bg-secondary);
-  padding: 4px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-}
-
-.auth-tab {
-  flex: 1;
-  padding: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  text-align: center;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 0.18s;
-  font-family: inherit;
-}
-
-.auth-tab:hover { color: var(--text-primary); }
-
-.auth-tab.active {
-  background: var(--bg-card);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-xs);
-}
-
-.role-badge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: var(--accent-light);
-  border: 1px solid rgba(37, 99, 235, 0.2);
-  border-radius: var(--radius-sm);
-  color: var(--accent);
-  font-size: 12.5px;
-  margin: 16px 0;
-}
-
 /* ─── Dashboard Layout ───────────────────────────────────────────────────── */
 .dashboard-shell {
   display: flex;
