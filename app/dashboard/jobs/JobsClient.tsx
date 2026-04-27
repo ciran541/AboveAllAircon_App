@@ -138,7 +138,14 @@ export default function JobsClient({
   }, [pushFilters]);
 
   // Keep jobs in sync when server sends fresh data (after navigation)
-  useEffect(() => { setJobs(initialJobs); }, [initialJobs]);
+  // Deduplicate by id to guard against React duplicate key warnings
+  useEffect(() => {
+    const seen = new Map<string, Job>();
+    for (const j of initialJobs) {
+      if (!seen.has(j.id)) seen.set(j.id, j);
+    }
+    setJobs(Array.from(seen.values()));
+  }, [initialJobs]);
 
   const normalizeStage = getStageDisplay;
 

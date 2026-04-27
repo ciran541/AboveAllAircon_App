@@ -129,7 +129,14 @@ export default async function JobsPage({
       if (grouped[job.stage].length < KANBAN_PER_STAGE) grouped[job.stage].push(job);
     }
 
-    initialJobs = [...Object.values(grouped).flat(), ...(completedRes.data || [])];
+    const merged = [...Object.values(grouped).flat(), ...(completedRes.data || [])];
+    // Deduplicate by id — guards against edge cases where the same job
+    // appears in both the active and completed queries
+    const seen = new Map<string, any>();
+    for (const job of merged) {
+      if (!seen.has(job.id)) seen.set(job.id, job);
+    }
+    initialJobs = Array.from(seen.values());
     staffProfiles = (profilesRes.data || []).map((p: any) => ({ ...p, email: p.email || "" }));
   }
 
