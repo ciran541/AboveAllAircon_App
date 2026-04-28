@@ -372,7 +372,7 @@ export default function JobsClient({
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ position: "relative", flex: 1, maxWidth: "300px", minWidth: "180px" }}>
             <input
-              placeholder="Search customers, brands, reports..."
+              placeholder="Search name, phone, address, brand..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{ padding: "9px 12px 9px 36px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13.5, width: "100%", outline: "none" }}

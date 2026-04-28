@@ -266,33 +266,31 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
                 </div>
               </div>
 
-              {isQuotation && (
-                <div style={{ background: '#f0f9ff', padding: 12, borderRadius: 10, border: '1px solid #bae6fd' }}>
-                  <label style={labelStyle}>Payment Company (Quotation Only)</label>
-                  <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
-                      <input 
-                        type="radio" 
-                        name="paymentCompany" 
-                        value="Above All Aircon" 
-                        checked={data.paymentCompany === 'Above All Aircon'} 
-                        onChange={() => setData(prev => ({ ...prev, paymentCompany: 'Above All Aircon' }))} 
-                      />
-                      Above All Aircon
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
-                      <input 
-                        type="radio" 
-                        name="paymentCompany" 
-                        value="Letswork" 
-                        checked={data.paymentCompany === 'Letswork'} 
-                        onChange={() => setData(prev => ({ ...prev, paymentCompany: 'Letswork' }))} 
-                      />
-                      Letswork
-                    </label>
-                  </div>
+              <div style={{ background: '#f0f9ff', padding: 12, borderRadius: 10, border: '1px solid #bae6fd' }}>
+                <label style={labelStyle}>Payment Company Selection</label>
+                <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+                    <input 
+                      type="radio" 
+                      name="paymentCompany" 
+                      value="Above All Aircon" 
+                      checked={data.paymentCompany === 'Above All Aircon'} 
+                      onChange={() => setData(prev => ({ ...prev, paymentCompany: 'Above All Aircon' }))} 
+                    />
+                    Above All Aircon
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+                    <input 
+                      type="radio" 
+                      name="paymentCompany" 
+                      value="Letswork" 
+                      checked={data.paymentCompany === 'Letswork'} 
+                      onChange={() => setData(prev => ({ ...prev, paymentCompany: 'Letswork' }))} 
+                    />
+                    Letswork
+                  </label>
                 </div>
-              )}
+              </div>
 
               {/* Row 2 */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

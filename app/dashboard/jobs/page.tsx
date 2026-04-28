@@ -53,6 +53,17 @@ export default async function JobsPage({
   const dateFrom  = params.date_from || "";
   const dateTo    = params.date_to   || "";
 
+  // ── Search Logic (Two-Step to handle cross-table OR) ──────────────────────
+  let matchingCustomerIds: string[] = [];
+  if (q) {
+    const { data: customers } = await supabase
+      .from("customers")
+      .select("id")
+      .or(`name.ilike.%${q}%,phone.ilike.%${q}%,address.ilike.%${q}%`)
+      .limit(200);
+    matchingCustomerIds = (customers || []).map(c => c.id);
+  }
+
   // ── Builds a Supabase query with all filters applied.
   function applyFilters(query: any) {
     if (service !== "All") query = query.eq("service_type", service);
@@ -62,9 +73,18 @@ export default async function JobsPage({
       query = query.eq("stage", dbStage);
     }
 
-    // Text search: ac_brand / service_report_no / customer name (joined filter)
+    // Text search: Job fields OR Matching Customer IDs
     if (q) {
-      query = query.or(`ac_brand.ilike.%${q}%,service_report_no.ilike.%${q}%,customers.name.ilike.%${q}%`);
+      const orParts = [
+        `ac_brand.ilike.%${q}%`,
+        `service_report_no.ilike.%${q}%`,
+        `notes.ilike.%${q}%`,
+        `visit_phone.ilike.%${q}%`
+      ];
+      if (matchingCustomerIds.length > 0) {
+        orParts.push(`customer_id.in.(${matchingCustomerIds.join(",")})`);
+      }
+      query = query.or(orParts.join(","));
     }
 
     // Date range filter — matches jobs where ANY of visit_date, job_date,
