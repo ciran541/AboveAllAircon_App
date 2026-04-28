@@ -38,16 +38,20 @@ export default async function JobsPage({
     service?: string;
     stage?: string;
     view?: string;
+    date_from?: string;
+    date_to?: string;
     cursor_created_at?: string;
     cursor_id?: string;
   }>;
 }) {
   const supabase = await createClient();
   const params = await searchParams;
-  const q       = params.q?.trim() || "";
-  const service = params.service || "All";
-  const stage   = params.stage   || "All";
-  const view    = params.view    || "board";
+  const q         = params.q?.trim() || "";
+  const service   = params.service || "All";
+  const stage     = params.stage   || "All";
+  const view      = params.view    || "board";
+  const dateFrom  = params.date_from || "";
+  const dateTo    = params.date_to   || "";
 
   // ── Builds a Supabase query with all filters applied.
   function applyFilters(query: any) {
@@ -61,6 +65,24 @@ export default async function JobsPage({
     // Text search: ac_brand / service_report_no / customer name (joined filter)
     if (q) {
       query = query.or(`ac_brand.ilike.%${q}%,service_report_no.ilike.%${q}%,customers.name.ilike.%${q}%`);
+    }
+
+    // Date range filter — matches jobs where ANY of visit_date, job_date,
+    // or second_visit_date falls within [dateFrom, dateTo].
+    if (dateFrom && dateTo) {
+      query = query.or(
+        `and(visit_date.gte.${dateFrom},visit_date.lte.${dateTo}),` +
+        `and(job_date.gte.${dateFrom},job_date.lte.${dateTo}),` +
+        `and(second_visit_date.gte.${dateFrom},second_visit_date.lte.${dateTo})`
+      );
+    } else if (dateFrom) {
+      query = query.or(
+        `visit_date.gte.${dateFrom},job_date.gte.${dateFrom},second_visit_date.gte.${dateFrom}`
+      );
+    } else if (dateTo) {
+      query = query.or(
+        `visit_date.lte.${dateTo},job_date.lte.${dateTo},second_visit_date.lte.${dateTo}`
+      );
     }
 
     return query;
@@ -157,7 +179,7 @@ export default async function JobsPage({
       userId={userId}
       role={"admin"}
       staffProfiles={staffProfiles}
-      initialFilters={{ q, service, stage, view }}
+      initialFilters={{ q, service, stage, view, dateFrom, dateTo }}
       nextCursor={nextCursor}
     />
   );

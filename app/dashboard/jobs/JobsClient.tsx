@@ -78,7 +78,7 @@ export default function JobsClient({
   userId: string;
   role: "admin" | "staff";
   staffProfiles: { id: string; role: string; full_name?: string; email?: string }[];
-  initialFilters: { q: string; service: string; stage: string; view: string };
+  initialFilters: { q: string; service: string; stage: string; view: string; dateFrom: string; dateTo: string };
   nextCursor: { created_at: string; id: string } | null;
 }) {
   const router = useRouter();
@@ -98,6 +98,9 @@ export default function JobsClient({
   const [serviceTypeFilter, setServiceTypeFilter] = useState(initialFilters.service);
   const [stageFilter, setStageFilter] = useState(initialFilters.stage);
   const [viewMode, setViewMode] = useState<"board" | "list">(initialFilters.view === "list" ? "list" : "board");
+  const [dateFrom, setDateFrom] = useState(initialFilters.dateFrom);
+  const [dateTo, setDateTo] = useState(initialFilters.dateTo);
+  const [showDateFilter, setShowDateFilter] = useState(!!(initialFilters.dateFrom || initialFilters.dateTo));
   const [isFullscreen, setIsFullscreen] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchTerm = searchTermRaw;
@@ -122,13 +125,17 @@ export default function JobsClient({
       service:    serviceTypeFilter,
       stage:      stageFilter,
       view:       viewMode,
+      date_from:  dateFrom,
+      date_to:    dateTo,
       ...overrides,
     });
     // Strip defaults to keep URLs clean
     ["q", "service", "stage"].forEach(k => { if (sp.get(k) === "All" || sp.get(k) === "") sp.delete(k); });
     if (sp.get("view") === "board") sp.delete("view");
+    if (!sp.get("date_from")) sp.delete("date_from");
+    if (!sp.get("date_to")) sp.delete("date_to");
     router.push(`${pathname}?${sp.toString()}`);
-  }, [searchTermRaw, serviceTypeFilter, stageFilter, viewMode, pathname, router]);
+  }, [searchTermRaw, serviceTypeFilter, stageFilter, viewMode, dateFrom, dateTo, pathname, router]);
 
   // Debounced search — waits 300ms after typing stops before pushing to URL
   const setSearchTerm = useCallback((val: string) => {
@@ -326,7 +333,7 @@ export default function JobsClient({
                 Jobs Pipeline {isFullscreen && <span style={{ fontSize: 11, background: "#f1f5f9", color: "#64748b", padding: "2px 8px", borderRadius: 4, verticalAlign: "middle", marginLeft: 8 }}>FULLSCREEN</span>}
               </h1>
               <p style={{ fontSize: 12.5, color: "#64748b", marginTop: 2 }}>
-                {filteredJobs.length} {filteredJobs.length === 1 ? "job" : "jobs"} visible {searchTerm || serviceTypeFilter !== "All" || stageFilter !== "All" ? "(filtered)" : ""}
+                {filteredJobs.length} {filteredJobs.length === 1 ? "job" : "jobs"} visible {searchTerm || serviceTypeFilter !== "All" || stageFilter !== "All" || dateFrom || dateTo ? "(filtered)" : ""}
               </p>
             </div>
           </div>
@@ -362,8 +369,8 @@ export default function JobsClient({
         </div>
 
         {/* Filter Bar */}
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <div style={{ position: "relative", flex: 1, maxWidth: "300px" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ position: "relative", flex: 1, maxWidth: "300px", minWidth: "180px" }}>
             <input
               placeholder="Search customers, brands, reports..."
               value={searchTerm}
@@ -386,13 +393,76 @@ export default function JobsClient({
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
-          {(searchTerm || serviceTypeFilter !== "All" || stageFilter !== "All") && (
-            <button onClick={() => { setSearchTermRaw(""); setServiceTypeFilter("All"); setStageFilter("All"); pushFilters({ q: "", service: "All", stage: "All" }); }}
+
+          {/* Date Range Toggle */}
+          <button
+            onClick={() => setShowDateFilter(!showDateFilter)}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "9px 14px", borderRadius: 8, fontSize: 13.5, fontWeight: 600, cursor: "pointer",
+              background: (dateFrom || dateTo) ? "#eff6ff" : "#fff",
+              color: (dateFrom || dateTo) ? "#2563eb" : "#475569",
+              border: `1px solid ${(dateFrom || dateTo) ? "#93c5fd" : "#e2e8f0"}`,
+              transition: "all 0.15s ease",
+            }}
+          >
+            📅 Date Filter {(dateFrom || dateTo) ? "●" : ""}
+          </button>
+
+          {(searchTerm || serviceTypeFilter !== "All" || stageFilter !== "All" || dateFrom || dateTo) && (
+            <button onClick={() => { setSearchTermRaw(""); setServiceTypeFilter("All"); setStageFilter("All"); setDateFrom(""); setDateTo(""); setShowDateFilter(false); pushFilters({ q: "", service: "All", stage: "All", date_from: "", date_to: "" }); }}
               style={{ background: "none", border: "none", color: "#3b82f6", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
-              Clear
+              Clear All
             </button>
           )}
         </div>
+
+        {/* Date Range Picker Row */}
+        {showDateFilter && (
+          <div style={{
+            display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap",
+            padding: "14px 16px", marginTop: 4,
+            background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0",
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#475569", whiteSpace: "nowrap" }}>📅 Filter by date range</span>
+            <span style={{ fontSize: 11.5, color: "#94a3b8", fontStyle: "italic" }}>(site visit / job / 2nd visit)</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+              <label style={{ fontSize: 12.5, fontWeight: 600, color: "#64748b" }}>From</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); pushFilters({ date_from: e.target.value }); }}
+                style={{
+                  padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0",
+                  fontSize: 13, background: "#fff", color: "#0f172a", outline: "none",
+                  cursor: "pointer",
+                }}
+              />
+              <span style={{ color: "#cbd5e1", fontWeight: 700 }}>→</span>
+              <label style={{ fontSize: 12.5, fontWeight: 600, color: "#64748b" }}>To</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); pushFilters({ date_to: e.target.value }); }}
+                style={{
+                  padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0",
+                  fontSize: 13, background: "#fff", color: "#0f172a", outline: "none",
+                  cursor: "pointer",
+                }}
+              />
+              {(dateFrom || dateTo) && (
+                <button
+                  onClick={() => { setDateFrom(""); setDateTo(""); pushFilters({ date_from: "", date_to: "" }); }}
+                  style={{
+                    padding: "6px 10px", borderRadius: 6, fontSize: 12, fontWeight: 600,
+                    background: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca",
+                    cursor: "pointer", whiteSpace: "nowrap",
+                  }}
+                >✕ Clear dates</button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="dashboard-content" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, padding: viewMode === "list" ? "24px 28px" : "24px 28px 0" }}>
