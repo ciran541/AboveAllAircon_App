@@ -470,7 +470,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
             </Text>
           )}
           <Text style={styles.footerBold}>
-            Upon completion of work, please make a Paynow transfer for balance payment to our company UEN
+            Please make a paynow transfer to our company UEN
           </Text>
           {data.paymentCompany === 'Letswork' ? (
             <Text style={styles.footerBold}>UEN: 202213844N (Letswork Pte Ltd)</Text>
