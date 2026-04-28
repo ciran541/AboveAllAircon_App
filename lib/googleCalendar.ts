@@ -145,7 +145,6 @@ function buildEventPayload(params: UpsertParams): CalendarEventPayload {
       `Phone: ${customerPhone}`,
       `Address: ${customerAddress}`,
       `Notes: ${jobNotes}`,
-      `Job ID: ${params.job.id}`,
     ].join("\n"),
     colorId: config.colorId,
     start: { dateTime: start, timeZone: timezone },
