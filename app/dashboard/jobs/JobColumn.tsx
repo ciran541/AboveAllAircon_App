@@ -119,12 +119,13 @@ export default function JobColumn({
             <div
               key={job.id}
               draggable
+              className="job-card-interactive"
               onDragStart={(e) => e.dataTransfer.setData("text/plain", job.id)}
               onClick={() => onJobClick(job)}
               style={{
                 background: "#fff", border: "1px solid #e4e9f0", borderRadius: 12,
                 padding: "14px", cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-                display: "flex", flexDirection: "column", gap: 10, transition: "all 0.15s ease", position: "relative",
+                display: "flex", flexDirection: "column", gap: 10, position: "relative",
               }}
               onMouseEnter={(e) => {
                 router.prefetch(`/dashboard/jobs/${job.id}`);

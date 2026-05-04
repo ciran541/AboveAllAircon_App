@@ -312,7 +312,7 @@ export default function JobsClient({
   };
 
   return (
-    <div style={isFullscreen ? {
+    <div className="page-fade-in" style={isFullscreen ? {
       position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
       zIndex: 1000, background: "#f8fafc", display: "flex", flexDirection: "column", overflow: "hidden"
     } : {}}>

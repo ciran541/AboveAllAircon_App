@@ -47,8 +47,8 @@ export default function JobListView({
                   key={job.id} 
                   onClick={() => onJobClick(job)}
                   onMouseEnter={() => router.prefetch(`/dashboard/jobs/${job.id}`)}
-                  style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background 0.2s' }}
-                  className="list-row-hover"
+                  style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
+                  className="list-row-hover list-row-interactive"
                 >
                   <td style={{ padding: '14px 20px' }}>
                     <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>{job.customers?.name || 'Unknown'}</div>

@@ -257,7 +257,7 @@ export default function JobDetailClient({
 
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+      <div className="page-fade-in" style={{ display: "flex", flexDirection: "column", gap: 28 }}>
 
         {/* ── HEADER ── */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16 }}>

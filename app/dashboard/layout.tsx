@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Sidebar from './Sidebar'
+import NavigationProgress from '@/components/NavigationProgress'
 
 export default async function DashboardLayout({
   children,
@@ -28,6 +29,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="dashboard-shell">
+      <NavigationProgress />
       <Sidebar email={email} fullName={fullName} />
       <div className="dashboard-main">
         {children}
