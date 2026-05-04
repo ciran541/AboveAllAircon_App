@@ -48,8 +48,8 @@ export async function POST(request: Request) {
 
 
   const body = await request.json()
-  const { email, password, full_name } = body
-  const role = 'admin' // Force all users to be admin
+  const { email, password, full_name, role: requestedRole } = body
+  const role = requestedRole === 'staff' ? 'staff' : 'admin'
 
   if (!email || !password) {
     return NextResponse.json(

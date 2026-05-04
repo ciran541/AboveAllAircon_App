@@ -5,9 +5,12 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Image from 'next/image'
 
+import type { UserRole } from '@/lib/auth'
+
 interface SidebarProps {
   email: string
   fullName?: string
+  role: UserRole
 }
 
 // ── SVG Icons ───────────────────────────────────────────────────────────────
@@ -91,11 +94,21 @@ function IconInventory() {
   )
 }
 
+function IconSalary() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="1" x2="12" y2="23" />
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+    </svg>
+  )
+}
+
 const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: <IconDashboard /> },
   { href: '/dashboard/jobs', label: 'Jobs', icon: <IconJobs /> },
   { href: '/dashboard/customers', label: 'Customers', icon: <IconUsers /> },
   { href: '/dashboard/inventory', label: 'Inventory', icon: <IconInventory /> },
+  { href: '/dashboard/salary', label: 'Salary', icon: <IconSalary /> },
 ]
 
 function getInitials(name: string, email: string) {
@@ -108,10 +121,13 @@ function getInitials(name: string, email: string) {
   return email.substring(0, 2).toUpperCase()
 }
 
-export default function Sidebar({ email, fullName = '' }: SidebarProps) {
+export default function Sidebar({ email, fullName = '', role }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const navItems = NAV_ITEMS
+  // Staff can only see the Salary module
+  const navItems = role === 'staff'
+    ? NAV_ITEMS.filter(item => item.href === '/dashboard/salary')
+    : NAV_ITEMS
   const initials = getInitials(fullName, email)
 
   async function handleLogout() {
@@ -168,7 +184,7 @@ export default function Sidebar({ email, fullName = '' }: SidebarProps) {
             <div className="user-name" title={fullName || email}>
               {fullName || email}
             </div>
-            <div className="user-role-label">Admin</div>
+            <div className="user-role-label">{role === 'admin' ? 'Admin' : 'Staff'}</div>
           </div>
         </div>
         <button id="logout-btn" className="btn-logout" onClick={handleLogout}>

@@ -107,6 +107,7 @@ function CreateUserModal({
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [role, setRole] = useState<'admin' | 'staff'>('admin')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -118,7 +119,7 @@ function CreateUserModal({
     const res = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, full_name: fullName, role: 'admin' }),
+      body: JSON.stringify({ email, password, full_name: fullName, role }),
     })
 
     const json = await res.json()
@@ -238,6 +239,50 @@ function CreateUserModal({
             />
           </div>
 
+          {/* Role */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>
+              Role
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setRole('admin')}
+                style={{
+                  flex: 1, padding: '10px 14px',
+                  border: role === 'admin' ? '2px solid #2563eb' : '1.5px solid #e4e9f0',
+                  borderRadius: 8,
+                  background: role === 'admin' ? '#eff6ff' : '#fff',
+                  cursor: 'pointer', fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}
+              >
+                <IconShield />
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>Admin</div>
+                  <div style={{ fontSize: 11, color: '#9ca3af' }}>Full access</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRole('staff')}
+                style={{
+                  flex: 1, padding: '10px 14px',
+                  border: role === 'staff' ? '2px solid #059669' : '1.5px solid #e4e9f0',
+                  borderRadius: 8,
+                  background: role === 'staff' ? '#ecfdf5' : '#fff',
+                  cursor: 'pointer', fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}
+              >
+                <IconUserSmall />
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>Staff</div>
+                  <div style={{ fontSize: 11, color: '#9ca3af' }}>Salary only</div>
+                </div>
+              </button>
+            </div>
+          </div>
 
           {/* Actions */}
           <div style={{
@@ -361,11 +406,11 @@ export default function UsersClient({
           {/* Table Head */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1.2fr 130px',
+            gridTemplateColumns: '1fr 1.2fr 100px 130px',
             gap: 12, padding: '10px 20px',
             background: '#f8fafc', borderBottom: '1px solid #e4e9f0',
           }}>
-            {['Member', 'Email', 'Joined'].map((h) => (
+            {['Member', 'Email', 'Role', 'Joined'].map((h) => (
               <div key={h} style={{
                 fontSize: 11, fontWeight: 700, color: '#94a3b8',
                 textTransform: 'uppercase', letterSpacing: '0.8px',
@@ -395,7 +440,7 @@ export default function UsersClient({
                 key={u.id}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1.2fr 130px',
+                  gridTemplateColumns: '1fr 1.2fr 100px 130px',
                   gap: 12, padding: '14px 20px',
                   borderBottom: i < users.length - 1 ? '1px solid #f1f5f9' : 'none',
                   alignItems: 'center',
@@ -440,6 +485,21 @@ export default function UsersClient({
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email}</span>
                 </div>
 
+                {/* Role */}
+                <div>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    padding: '3px 10px', borderRadius: 99,
+                    fontSize: 11, fontWeight: 600,
+                    background: u.role === 'admin' ? '#eff6ff' : '#ecfdf5',
+                    color: u.role === 'admin' ? '#2563eb' : '#059669',
+                    border: u.role === 'admin' ? '1px solid rgba(37,99,235,0.2)' : '1px solid rgba(5,150,105,0.2)',
+                    textTransform: 'capitalize',
+                  }}>
+                    {u.role === 'admin' ? <IconShield /> : <IconUserSmall />}
+                    {u.role}
+                  </span>
+                </div>
 
                 {/* Joined date */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#9ca3af', fontSize: 12.5 }}>
