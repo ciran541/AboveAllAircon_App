@@ -133,14 +133,16 @@ export default function WorkersTab({ workers, role, onCreateWorker, onUpdateWork
 
       {/* Table */}
       <div style={{ background: '#fff', border: '1px solid #e4e9f0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
-        <div style={{
-          display: 'grid', gridTemplateColumns: isAdmin ? '1.5fr 1fr 1fr 1.2fr 80px' : '1.5fr 1fr 1fr 1.2fr',
-          gap: 12, padding: '10px 20px', background: '#f8fafc', borderBottom: '1px solid #e4e9f0',
-        }}>
-          {['Name', 'WP Number', 'Basic Salary', 'Bank Account', ...(isAdmin ? ['Actions'] : [])].map(h => (
-            <div key={h} style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.8px' }}>{h}</div>
-          ))}
-        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <div style={{ minWidth: 600 }}>
+            <div style={{
+              display: 'grid', gridTemplateColumns: isAdmin ? '1.5fr 1fr 1fr 1.2fr 80px' : '1.5fr 1fr 1fr 1.2fr',
+              gap: 12, padding: '10px 20px', background: '#f8fafc', borderBottom: '1px solid #e4e9f0',
+            }}>
+              {['Name', 'WP Number', 'Basic Salary', 'Bank Account', ...(isAdmin ? ['Actions'] : [])].map(h => (
+                <div key={h} style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.8px' }}>{h}</div>
+              ))}
+            </div>
 
         {workers.length === 0 && (
           <div style={{ padding: '48px 24px', textAlign: 'center', color: '#9ca3af' }}>
@@ -184,6 +186,8 @@ export default function WorkersTab({ workers, role, onCreateWorker, onUpdateWork
             )}
           </div>
         ))}
+          </div>
+        </div>
       </div>
 
       {/* Modal */}

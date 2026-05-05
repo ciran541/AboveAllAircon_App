@@ -56,6 +56,16 @@ export async function addOtEntry(entry: {
   return SalaryService.addOtEntry(entry, user.id);
 }
 
+export async function addBulkOtEntries(entries: Array<{
+  worker_id: string;
+  entry_date: string;
+  hours: number;
+  notes?: string;
+}>) {
+  const user = await getAuthUser();
+  return SalaryService.addBulkOtEntries(entries, user.id);
+}
+
 export async function deleteOtEntry(id: string) {
   return SalaryService.deleteOtEntry(id);
 }

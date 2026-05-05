@@ -12,6 +12,7 @@ interface OtEntriesTabProps {
   year: number
   userId: string
   onAddEntry: (data: { worker_id: string; entry_date: string; hours: number; notes?: string }) => Promise<any>
+  onAddBulkEntries: (entries: Array<{ worker_id: string; entry_date: string; hours: number; notes?: string }>) => Promise<any>
   onDeleteEntry: (id: string) => Promise<any>
 }
 
@@ -27,9 +28,9 @@ function IconX() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
 }
 
-export default function OtEntriesTab({ workers, entries, month, year, userId, onAddEntry, onDeleteEntry }: OtEntriesTabProps) {
+export default function OtEntriesTab({ workers, entries, month, year, userId, onAddEntry, onAddBulkEntries, onDeleteEntry }: OtEntriesTabProps) {
   const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ worker_id: '', entry_date: '', hours: '', notes: '' })
+  const [bulkForm, setBulkForm] = useState<{ entry_date: string; notes: string; hours: Record<string, string> }>({ entry_date: '', notes: '', hours: {} })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
@@ -49,7 +50,7 @@ export default function OtEntriesTab({ workers, entries, month, year, userId, on
   }
 
   function openAdd() {
-    setForm({ worker_id: workers[0]?.id ?? '', entry_date: '', hours: '', notes: '' })
+    setBulkForm({ entry_date: '', notes: '', hours: {} })
     setError(null)
     setShowModal(true)
   }
@@ -57,12 +58,29 @@ export default function OtEntriesTab({ workers, entries, month, year, userId, on
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    const hours = parseFloat(form.hours)
-    if (isNaN(hours) || hours <= 0) { setError('Invalid hours'); return }
-    if (!form.worker_id) { setError('Select a worker'); return }
-    if (!form.entry_date) { setError('Select a date'); return }
+    
+    if (!bulkForm.entry_date) { setError('Select a date'); return }
+    
+    const entriesToSubmit = []
+    for (const [workerId, hoursStr] of Object.entries(bulkForm.hours)) {
+      const hours = parseFloat(hoursStr)
+      if (!isNaN(hours) && hours > 0) {
+        entriesToSubmit.push({
+          worker_id: workerId,
+          entry_date: bulkForm.entry_date,
+          hours,
+          notes: bulkForm.notes
+        })
+      }
+    }
+    
+    if (entriesToSubmit.length === 0) {
+      setError('Please enter hours for at least one worker')
+      return
+    }
+
     setLoading(true)
-    const result = await onAddEntry({ worker_id: form.worker_id, entry_date: form.entry_date, hours, notes: form.notes })
+    const result = await onAddBulkEntries(entriesToSubmit)
     setLoading(false)
     if (result?.error) { setError(result.error); return }
     setShowModal(false)
@@ -162,42 +180,52 @@ export default function OtEntriesTab({ workers, entries, month, year, userId, on
       {/* Add OT Modal */}
       {showModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(17,24,39,0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 440, padding: 28, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.12)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
-              <div>
-                <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>Add OT Entry</h2>
-                <p style={{ fontSize: 13, color: '#9ca3af', marginTop: 3 }}>Log additional overtime hours</p>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, width: '100%', maxWidth: 500, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.12)' }}>
+            <div style={{ padding: 28, paddingBottom: 16, borderBottom: '1px solid #e4e9f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
+                <div>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111827' }}>Add OT Entries</h2>
+                  <p style={{ fontSize: 13, color: '#9ca3af', marginTop: 3 }}>Log overtime for multiple workers on a single date</p>
+                </div>
+                <button onClick={() => setShowModal(false)} style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid #e4e9f0', borderRadius: 8, cursor: 'pointer', color: '#9ca3af' }}><IconX /></button>
               </div>
-              <button onClick={() => setShowModal(false)} style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid #e4e9f0', borderRadius: 8, cursor: 'pointer', color: '#9ca3af' }}><IconX /></button>
-            </div>
 
-            {error && <div style={{ padding: '10px 14px', marginBottom: 16, background: '#fef2f2', border: '1px solid rgba(220,38,38,0.25)', borderRadius: 8, color: '#dc2626', fontSize: 13 }}>⚠ {error}</div>}
+              {error && <div style={{ padding: '10px 14px', marginBottom: 16, background: '#fef2f2', border: '1px solid rgba(220,38,38,0.25)', borderRadius: 8, color: '#dc2626', fontSize: 13 }}>⚠ {error}</div>}
 
-            <form onSubmit={handleSubmit}>
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>Worker *</label>
-                <select className="form-input" required value={form.worker_id} onChange={e => setForm(f => ({ ...f, worker_id: e.target.value }))}>
-                  <option value="">Select worker</option>
-                  {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>Date *</label>
-                  <input className="form-input" type="date" required value={form.entry_date} onChange={e => setForm(f => ({ ...f, entry_date: e.target.value }))} />
+                  <input className="form-input" type="date" required value={bulkForm.entry_date} onChange={e => setBulkForm(f => ({ ...f, entry_date: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #e4e9f0', borderRadius: 8, fontSize: 13.5 }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>Hours *</label>
-                  <input className="form-input" type="number" step="0.5" min="0.5" required value={form.hours} onChange={e => setForm(f => ({ ...f, hours: e.target.value }))} placeholder="e.g. 2" />
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>Notes (optional)</label>
+                  <input className="form-input" value={bulkForm.notes} onChange={e => setBulkForm(f => ({ ...f, notes: e.target.value }))} placeholder="e.g. Emergency repair" style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #e4e9f0', borderRadius: 8, fontSize: 13.5 }} />
                 </div>
               </div>
-              <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>Notes (optional)</label>
-                <input className="form-input" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="e.g. Emergency repair" />
+            </div>
+
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 28px' }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 12 }}>Workers Hours</div>
+                {workers.sort((a, b) => a.name.localeCompare(b.name)).map(w => (
+                  <div key={w.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 500, color: '#111827' }}>{w.name}</div>
+                    <input 
+                      type="number" 
+                      step="0.5" 
+                      min="0"
+                      value={bulkForm.hours[w.id] || ''} 
+                      onChange={e => setBulkForm(f => ({ ...f, hours: { ...f.hours, [w.id]: e.target.value } }))}
+                      placeholder="Hours" 
+                      style={{ width: 80, padding: '6px 10px', border: '1.5px solid #e4e9f0', borderRadius: 6, fontSize: 13, textAlign: 'center' }} 
+                    />
+                  </div>
+                ))}
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 18, borderTop: '1px solid #e4e9f0' }}>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '18px 28px', borderTop: '1px solid #e4e9f0', background: '#f8fafc', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}>
                 <button type="button" onClick={() => setShowModal(false)} disabled={loading} style={{ padding: '9px 18px', background: '#fff', border: '1.5px solid #e4e9f0', borderRadius: 8, fontSize: 13.5, fontWeight: 500, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-                <button type="submit" disabled={loading} style={{ padding: '9px 20px', background: loading ? '#93c5fd' : '#2563eb', border: 'none', borderRadius: 8, fontSize: 13.5, fontWeight: 600, color: '#fff', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>{loading ? 'Adding…' : 'Add Entry'}</button>
+                <button type="submit" disabled={loading} style={{ padding: '9px 20px', background: loading ? '#93c5fd' : '#2563eb', border: 'none', borderRadius: 8, fontSize: 13.5, fontWeight: 600, color: '#fff', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>{loading ? 'Adding…' : 'Add Entries'}</button>
               </div>
             </form>
           </div>

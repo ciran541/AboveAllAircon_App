@@ -58,7 +58,7 @@ export default function PayslipsTab({ payslips, month, year, role, onCreatePaysl
     setConfirmDialog({
       isOpen: true,
       title: 'Generate Payslips',
-      message: `Generate payslips for ${MONTH_NAMES[month]} ${year}? This will replace any existing payslips for this month.`,
+      message: `Generate payslips for ${MONTH_NAMES[month]} ${year}? Existing signed payslips will be PRESERVED. Unsigned payslips will be replaced with new calculations.`,
       confirmText: 'Generate',
       confirmColor: '#2563eb', // Blue
       onConfirm: async () => {

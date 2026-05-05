@@ -130,6 +130,31 @@ export async function addOtEntry(entry: {
   return { entry: data }
 }
 
+export async function addBulkOtEntries(entries: Array<{
+  worker_id: string
+  entry_date: string
+  hours: number
+  notes?: string
+}>, userId: string) {
+  if (entries.length === 0) return { success: true }
+  
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('ot_entries')
+    .insert(entries.map(e => ({
+      worker_id: e.worker_id,
+      entry_date: e.entry_date,
+      hours: e.hours,
+      notes: e.notes ?? '',
+      created_by: userId,
+    })))
+    .select()
+
+  if (error) return { error: error.message }
+  invalidateSalaryCaches()
+  return { entries: data }
+}
+
 export async function deleteOtEntry(id: string) {
   const supabase = await createClient()
   const { error } = await supabase
@@ -194,51 +219,83 @@ export async function createMonthlyPayslips(month: number, year: number, working
     otByWorker[entry.worker_id] = (otByWorker[entry.worker_id] ?? 0) + Number(entry.hours)
   }
 
-  // 4. Build payslip rows
-  const payslipRows = workers.map(w => {
-    const basicSalary = Number(w.basic_salary)
-    const otPerHour = basicSalary / 26 / 8 * 1.5
-    const additional3hrOt = workingDays * 3
-    const additionalOt = otByWorker[w.id] ?? 0
-    const totalOt = additional3hrOt + additionalOt
-    const totalOtAmount = totalOt * otPerHour
-    const totalSalary = basicSalary + totalOtAmount
-
-    return {
-      worker_id: w.id,
-      month,
-      year,
-      worker_name: w.name,
-      wp_number: w.wp_number ?? '',
-      basic_salary: basicSalary,
-      bank_account: w.bank_account ?? '',
-      working_days: workingDays,
-      ot_per_hour: Math.round(otPerHour * 100) / 100,
-      additional_3hr_ot: additional3hrOt,
-      additional_ot: additionalOt,
-      total_ot: totalOt,
-      total_ot_amount: Math.round(totalOtAmount * 100) / 100,
-      total_salary: Math.round(totalSalary * 100) / 100,
-    }
-  })
-
-  // 5. Delete existing payslips for this month (if regenerating)
-  await supabase
+  // 3.5 Fetch existing payslips for the month
+  const { data: existingPayslips, error: existingError } = await supabase
     .from('salary_payslips')
-    .delete()
+    .select('id, worker_id, signed_at')
     .eq('month', month)
     .eq('year', year)
+    
+  if (existingError) return { error: existingError.message }
+  
+  // Find workers with signed payslips
+  const signedWorkerIds = new Set(
+    (existingPayslips ?? [])
+      .filter(p => p.signed_at !== null)
+      .map(p => p.worker_id)
+  )
+
+  // 4. Build payslip rows (skipping workers with signed payslips)
+  const payslipRows = workers
+    .filter(w => !signedWorkerIds.has(w.id))
+    .map(w => {
+      const basicSalary = Number(w.basic_salary)
+      const otPerHour = basicSalary / 26 / 8 * 1.5
+      const additional3hrOt = workingDays * 3
+      const additionalOt = otByWorker[w.id] ?? 0
+      const totalOt = additional3hrOt + additionalOt
+      const totalOtAmount = totalOt * otPerHour
+      const totalSalary = basicSalary + totalOtAmount
+
+      return {
+        worker_id: w.id,
+        month,
+        year,
+        worker_name: w.name,
+        wp_number: w.wp_number ?? '',
+        basic_salary: basicSalary,
+        bank_account: w.bank_account ?? '',
+        working_days: workingDays,
+        ot_per_hour: Math.round(otPerHour * 100) / 100,
+        additional_3hr_ot: additional3hrOt,
+        additional_ot: additionalOt,
+        total_ot: totalOt,
+        total_ot_amount: Math.round(totalOtAmount * 100) / 100,
+        total_salary: Math.round(totalSalary * 100) / 100,
+      }
+    })
+
+  // 5. Delete existing UNSIGNED payslips for this month
+  const unsignedPayslipIds = (existingPayslips ?? [])
+    .filter(p => p.signed_at === null)
+    .map(p => p.id)
+
+  if (unsignedPayslipIds.length > 0) {
+    await supabase
+      .from('salary_payslips')
+      .delete()
+      .in('id', unsignedPayslipIds)
+  }
 
   // 6. Insert new payslips
-  const { data, error: insertError } = await supabase
-    .from('salary_payslips')
-    .insert(payslipRows)
-    .select()
+  if (payslipRows.length > 0) {
+    const { error: insertError } = await supabase
+      .from('salary_payslips')
+      .insert(payslipRows)
 
-  if (insertError) return { error: insertError.message }
+    if (insertError) return { error: insertError.message }
+  }
+
+  // Refetch all to return the updated list including preserved signed ones
+  const { data: finalPayslips } = await supabase
+    .from('salary_payslips')
+    .select('*')
+    .eq('month', month)
+    .eq('year', year)
+    .order('worker_name', { ascending: true })
 
   invalidateSalaryCaches()
-  return { payslips: data }
+  return { payslips: finalPayslips ?? [] }
 }
 
 export async function signPayslip(payslipId: string) {

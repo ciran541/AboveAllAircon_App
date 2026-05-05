@@ -79,6 +79,14 @@ export default function SalaryClient({
     return result
   }
 
+  async function handleAddBulkOtEntries(entries: any[]) {
+    const result = await salaryActions.addBulkOtEntries(entries)
+    if (result && !('error' in result) && result.entries) {
+      setOtEntries(prev => [...prev, ...result.entries].sort((a: any, b: any) => a.entry_date.localeCompare(b.entry_date)))
+    }
+    return result
+  }
+
   async function handleDeleteOtEntry(id: string) {
     const result = await salaryActions.deleteOtEntry(id)
     if (result && !('error' in result) && result.success) setOtEntries(prev => prev.filter((e: any) => e.id !== id))
@@ -156,7 +164,7 @@ export default function SalaryClient({
           <WorkersTab workers={workers} role={role} onCreateWorker={handleCreateWorker} onUpdateWorker={handleUpdateWorker} onDeleteWorker={handleDeleteWorker} />
         )}
         {activeTab === 'ot' && (
-          <OtEntriesTab workers={workers} entries={otEntries} month={month} year={year} userId={userId} onAddEntry={handleAddOtEntry} onDeleteEntry={handleDeleteOtEntry} />
+          <OtEntriesTab workers={workers} entries={otEntries} month={month} year={year} userId={userId} onAddEntry={handleAddOtEntry} onAddBulkEntries={handleAddBulkOtEntries} onDeleteEntry={handleDeleteOtEntry} />
         )}
         {activeTab === 'payslips' && (
           <PayslipsTab payslips={payslips} month={month} year={year} role={role} onCreatePayslips={handleCreatePayslips} onSignPayslip={handleSignPayslip} />
