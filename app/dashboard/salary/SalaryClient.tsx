@@ -49,52 +49,52 @@ export default function SalaryClient({
       salaryActions.getPayslips(m, y),
       salaryActions.getOtEntries(m, y),
     ])
-    setPayslips(payRes.payslips ?? [])
-    setOtEntries(otRes.entries ?? [])
+    setPayslips(!('error' in payRes) ? payRes.payslips ?? [] : [])
+    setOtEntries(!('error' in otRes) ? otRes.entries ?? [] : [])
   }
 
   // Worker actions
   async function handleCreateWorker(data: any) {
     const result = await salaryActions.createWorker(data)
-    if (result?.worker) setWorkers(prev => [...prev, result.worker].sort((a, b) => a.name.localeCompare(b.name)))
+    if (result && !('error' in result) && result.worker) setWorkers(prev => [...prev, result.worker].sort((a, b) => a.name.localeCompare(b.name)))
     return result
   }
 
   async function handleUpdateWorker(id: string, data: any) {
     const result = await salaryActions.updateWorker(id, data)
-    if (result?.worker) setWorkers(prev => prev.map(w => w.id === id ? result.worker : w))
+    if (result && !('error' in result) && result.worker) setWorkers(prev => prev.map(w => w.id === id ? result.worker : w))
     return result
   }
 
   async function handleDeleteWorker(id: string) {
     const result = await salaryActions.deleteWorker(id)
-    if (result?.success) setWorkers(prev => prev.filter(w => w.id !== id))
+    if (result && !('error' in result) && result.success) setWorkers(prev => prev.filter(w => w.id !== id))
     return result
   }
 
   // OT actions
   async function handleAddOtEntry(data: any) {
     const result = await salaryActions.addOtEntry(data)
-    if (result?.entry) setOtEntries(prev => [...prev, result.entry].sort((a: any, b: any) => a.entry_date.localeCompare(b.entry_date)))
+    if (result && !('error' in result) && result.entry) setOtEntries(prev => [...prev, result.entry].sort((a: any, b: any) => a.entry_date.localeCompare(b.entry_date)))
     return result
   }
 
   async function handleDeleteOtEntry(id: string) {
     const result = await salaryActions.deleteOtEntry(id)
-    if (result?.success) setOtEntries(prev => prev.filter((e: any) => e.id !== id))
+    if (result && !('error' in result) && result.success) setOtEntries(prev => prev.filter((e: any) => e.id !== id))
     return result
   }
 
   // Payslip actions
   async function handleCreatePayslips(m: number, y: number, workingDays?: number) {
     const result = await salaryActions.createMonthlyPayslips(m, y, workingDays)
-    if (result?.payslips) setPayslips(result.payslips)
+    if (result && !('error' in result) && result.payslips) setPayslips(result.payslips)
     return result
   }
 
   async function handleSignPayslip(id: string) {
     const result = await salaryActions.signPayslip(id)
-    if (result?.payslip) setPayslips(prev => prev.map((p: any) => p.id === id ? result.payslip : p))
+    if (result && !('error' in result) && result.payslip) setPayslips(prev => prev.map((p: any) => p.id === id ? result.payslip : p))
     return result
   }
 
