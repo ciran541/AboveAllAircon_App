@@ -134,7 +134,8 @@ export default function WorkersTab({ workers, role, onCreateWorker, onUpdateWork
       {/* Table */}
       <div style={{ background: '#fff', border: '1px solid #e4e9f0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
         <div style={{ overflowX: 'auto' }}>
-          <div style={{ minWidth: 600 }}>
+          {/* Desktop table */}
+          <div className="workers-desktop-table" style={{ minWidth: 600 }}>
             <div style={{
               display: 'grid', gridTemplateColumns: isAdmin ? '1.5fr 1fr 1fr 1.2fr 80px' : '1.5fr 1fr 1fr 1.2fr',
               gap: 12, padding: '10px 20px', background: '#f8fafc', borderBottom: '1px solid #e4e9f0',
@@ -144,48 +145,80 @@ export default function WorkersTab({ workers, role, onCreateWorker, onUpdateWork
               ))}
             </div>
 
-        {workers.length === 0 && (
-          <div style={{ padding: '48px 24px', textAlign: 'center', color: '#9ca3af' }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>👷</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#6b7280', marginBottom: 4 }}>No workers yet</div>
-            <div style={{ fontSize: 13 }}>Add your first worker above.</div>
-          </div>
-        )}
-
-        {workers.map((w, i) => (
-          <div key={w.id} style={{
-            display: 'grid', gridTemplateColumns: isAdmin ? '1.5fr 1fr 1fr 1.2fr 80px' : '1.5fr 1fr 1fr 1.2fr',
-            gap: 12, padding: '14px 20px',
-            borderBottom: i < workers.length - 1 ? '1px solid #f1f5f9' : 'none',
-            alignItems: 'center', transition: 'background 0.12s',
-          }}
-            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-            onMouseLeave={e => e.currentTarget.style.background = ''}
-          >
-            <div style={{ fontSize: 13.5, fontWeight: 600, color: '#111827' }}>{w.name}</div>
-            <div style={{ fontSize: 13, color: '#4b5563', fontFamily: 'monospace' }}>{w.wp_number || '—'}</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{formatCurrency(w.basic_salary)}</div>
-            <div style={{ fontSize: 13, color: '#4b5563' }}>{w.bank_account || '—'}</div>
-            {isAdmin && (
-              <div style={{ display: 'flex', gap: 4 }}>
-                <button onClick={() => openEdit(w)} style={{
-                  width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'none', border: '1px solid #e4e9f0', borderRadius: 6, cursor: 'pointer', color: '#64748b',
-                  transition: 'all 0.15s',
-                }} title="Edit">
-                  <IconEdit />
-                </button>
-                <button onClick={() => handleDelete(w.id)} style={{
-                  width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'none', border: '1px solid #e4e9f0', borderRadius: 6, cursor: 'pointer', color: '#64748b',
-                  transition: 'all 0.15s',
-                }} title="Remove">
-                  <IconTrash />
-                </button>
+            {workers.map((w, i) => (
+              <div key={w.id} style={{
+                display: 'grid', gridTemplateColumns: isAdmin ? '1.5fr 1fr 1fr 1.2fr 80px' : '1.5fr 1fr 1fr 1.2fr',
+                gap: 12, padding: '14px 20px',
+                borderBottom: i < workers.length - 1 ? '1px solid #f1f5f9' : 'none',
+                alignItems: 'center', transition: 'background 0.12s',
+              }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                onMouseLeave={e => e.currentTarget.style.background = ''}
+              >
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: '#111827' }}>{w.name}</div>
+                <div style={{ fontSize: 13, color: '#4b5563', fontFamily: 'monospace' }}>{w.wp_number || '—'}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{formatCurrency(w.basic_salary)}</div>
+                <div style={{ fontSize: 13, color: '#4b5563' }}>{w.bank_account || '—'}</div>
+                {isAdmin && (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button onClick={() => openEdit(w)} style={{
+                      width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: 'none', border: '1px solid #e4e9f0', borderRadius: 6, cursor: 'pointer', color: '#64748b',
+                      transition: 'all 0.15s',
+                    }} title="Edit">
+                      <IconEdit />
+                    </button>
+                    <button onClick={() => handleDelete(w.id)} style={{
+                      width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: 'none', border: '1px solid #e4e9f0', borderRadius: 6, cursor: 'pointer', color: '#64748b',
+                      transition: 'all 0.15s',
+                    }} title="Remove">
+                      <IconTrash />
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
+            ))}
           </div>
-        ))}
+
+          {/* Mobile cards */}
+          <div className="workers-mobile-cards">
+            {workers.map((w, i) => (
+              <div key={w.id + '-card'} style={{ 
+                padding: 16, 
+                borderBottom: i < workers.length - 1 ? '1px solid #f1f5f9' : 'none',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{w.name}</div>
+                    <div style={{ fontSize: 12, color: '#64748b', fontFamily: 'monospace', marginTop: 2 }}>{w.wp_number || 'No WP'}</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{formatCurrency(w.basic_salary)}</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', marginTop: 2 }}>Basic</div>
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: 13, color: '#4b5563' }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Bank Account</span>
+                    {w.bank_account || '—'}
+                  </div>
+                  {isAdmin && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => openEdit(w)} style={{
+                        padding: '6px 12px', background: '#f8fafc', border: '1px solid #e4e9f0', borderRadius: 6,
+                        fontSize: 12, fontWeight: 600, color: '#64748b', cursor: 'pointer'
+                      }}>Edit</button>
+                      <button onClick={() => handleDelete(w.id)} style={{
+                        padding: '6px 12px', background: '#fff1f2', border: '1px solid #fecaca', borderRadius: 6,
+                        fontSize: 12, fontWeight: 600, color: '#dc2626', cursor: 'pointer'
+                      }}>Remove</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -245,6 +278,14 @@ export default function WorkersTab({ workers, role, onCreateWorker, onUpdateWork
           </div>
         </div>
       )}
+
+      <style>{`
+        .workers-mobile-cards { display: none; }
+        @media (max-width: 640px) {
+          .workers-desktop-table { display: none !important; }
+          .workers-mobile-cards { display: block; }
+        }
+      `}</style>
     </>
   )
 }

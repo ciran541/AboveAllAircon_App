@@ -88,9 +88,9 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
     balance: defaultQuoted - defaultDeposit,
     jobDateStr: job?.job_date ? new Date(job.job_date).toLocaleDateString('en-GB') : 'TBD',
     isQuotation,
-    cvRedeemed: job?.cv_redeemed || false,
     cvAmount: Number(job?.cv_amount || 300),
     paymentCompany: 'Above All Aircon',
+    hideSupplyDesc: true, // Default to true as requested
   });
 
   // ── Textarea mirror state (arrays → editable text) ───────────────────────
@@ -329,10 +329,25 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
                 <label style={labelStyle}>Labor Description (Item 1)</label>
                 <input name="laborDesc" value={data.laborDesc} onChange={handleChange} style={inputStyle} />
               </div>
-              <div>
-                <label style={labelStyle}>Supply Description (Item 2)</label>
-                <input name="supplyDesc" value={data.supplyDesc} onChange={handleChange} style={inputStyle} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <input 
+                  type="checkbox" 
+                  id="hideSupplyDesc" 
+                  name="hideSupplyDesc" 
+                  checked={data.hideSupplyDesc} 
+                  onChange={handleChange} 
+                  style={{ width: 16, height: 16, cursor: 'pointer' }} 
+                />
+                <label htmlFor="hideSupplyDesc" style={{ ...labelStyle, marginBottom: 0, cursor: 'pointer' }}>
+                  Hide Supply Description (Item 2)
+                </label>
               </div>
+              {!data.hideSupplyDesc && (
+                <div>
+                  <label style={labelStyle}>Supply Description (Item 2)</label>
+                  <input name="supplyDesc" value={data.supplyDesc} onChange={handleChange} style={inputStyle} />
+                </div>
+              )}
               <div>
                 <label style={labelStyle}>Brand / Model Heading</label>
                 <input name="brandHeading" value={data.brandHeading} onChange={handleChange} style={inputStyle} />

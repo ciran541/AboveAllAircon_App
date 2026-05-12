@@ -2,7 +2,7 @@
  * app/services/salaryService.ts
  *
  * Server-only domain service for salary module.
- * All direct Supabase mutations for workers, OT entries, and payslips live here.
+ * All direct Supabase mutations for workers, OT entries, bonus entries, and payslips live here.
  */
 
 import { createClient } from '@/lib/supabase/server'
@@ -167,6 +167,88 @@ export async function deleteOtEntry(id: string) {
   return { success: true }
 }
 
+// ── Bonus Entries ─────────────────────────────────────────────────────────────
+
+export async function getBonusEntries(month: number, year: number) {
+  const supabase = await createClient()
+
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+  const endMonth = month === 12 ? 1 : month + 1
+  const endYear = month === 12 ? year + 1 : year
+  const endDate = `${endYear}-${String(endMonth).padStart(2, '0')}-01`
+
+  const { data, error } = await supabase
+    .from('bonus_entries')
+    .select('*')
+    .gte('entry_date', startDate)
+    .lt('entry_date', endDate)
+    .order('entry_date', { ascending: true })
+
+  if (error) return { error: error.message, entries: [] }
+  return { entries: data ?? [] }
+}
+
+export async function addBonusEntry(entry: {
+  worker_id: string
+  entry_date: string
+  amount: number
+  notes?: string
+}, userId: string) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('bonus_entries')
+    .insert([{
+      worker_id: entry.worker_id,
+      entry_date: entry.entry_date,
+      amount: entry.amount,
+      notes: entry.notes ?? '',
+      created_by: userId,
+    }])
+    .select()
+    .single()
+
+  if (error) return { error: error.message }
+  invalidateSalaryCaches()
+  return { entry: data }
+}
+
+export async function addBulkBonusEntries(entries: Array<{
+  worker_id: string
+  entry_date: string
+  amount: number
+  notes?: string
+}>, userId: string) {
+  if (entries.length === 0) return { success: true }
+  
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('bonus_entries')
+    .insert(entries.map(e => ({
+      worker_id: e.worker_id,
+      entry_date: e.entry_date,
+      amount: e.amount,
+      notes: e.notes ?? '',
+      created_by: userId,
+    })))
+    .select()
+
+  if (error) return { error: error.message }
+  invalidateSalaryCaches()
+  return { entries: data }
+}
+
+export async function deleteBonusEntry(id: string) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from('bonus_entries')
+    .delete()
+    .eq('id', id)
+
+  if (error) return { error: error.message }
+  invalidateSalaryCaches()
+  return { success: true }
+}
+
 // ── Payslips ──────────────────────────────────────────────────────────────────
 
 export async function getPayslips(month: number, year: number) {
@@ -184,7 +266,7 @@ export async function getPayslips(month: number, year: number) {
 
 /**
  * Core function: Creates monthly payslips for all active workers.
- * Snapshots worker data and calculates all OT fields.
+ * Snapshots worker data and calculates all OT + bonus fields.
  */
 export async function createMonthlyPayslips(month: number, year: number, workingDays: number = 26) {
   const supabase = await createClient()
@@ -213,10 +295,25 @@ export async function createMonthlyPayslips(month: number, year: number, working
 
   if (otError) return { error: otError.message }
 
+  // 2b. Get bonus entries for the month
+  const { data: bonusEntries, error: bonusError } = await supabase
+    .from('bonus_entries')
+    .select('*')
+    .gte('entry_date', startDate)
+    .lt('entry_date', endDate)
+
+  if (bonusError) return { error: bonusError.message }
+
   // 3. Sum OT hours per worker
   const otByWorker: Record<string, number> = {}
   for (const entry of (otEntries ?? [])) {
     otByWorker[entry.worker_id] = (otByWorker[entry.worker_id] ?? 0) + Number(entry.hours)
+  }
+
+  // 3a. Sum bonus amounts per worker
+  const bonusByWorker: Record<string, number> = {}
+  for (const entry of (bonusEntries ?? [])) {
+    bonusByWorker[entry.worker_id] = (bonusByWorker[entry.worker_id] ?? 0) + Number(entry.amount)
   }
 
   // 3.5 Fetch existing payslips for the month
@@ -245,7 +342,8 @@ export async function createMonthlyPayslips(month: number, year: number, working
       const additionalOt = otByWorker[w.id] ?? 0
       const totalOt = additional3hrOt + additionalOt
       const totalOtAmount = totalOt * otPerHour
-      const totalSalary = basicSalary + totalOtAmount
+      const totalBonus = bonusByWorker[w.id] ?? 0
+      const totalSalary = basicSalary + totalOtAmount + totalBonus
 
       return {
         worker_id: w.id,
@@ -261,6 +359,7 @@ export async function createMonthlyPayslips(month: number, year: number, working
         additional_ot: additionalOt,
         total_ot: totalOt,
         total_ot_amount: Math.round(totalOtAmount * 100) / 100,
+        total_bonus: Math.round(totalBonus * 100) / 100,
         total_salary: Math.round(totalSalary * 100) / 100,
       }
     })
@@ -298,11 +397,14 @@ export async function createMonthlyPayslips(month: number, year: number, working
   return { payslips: finalPayslips ?? [] }
 }
 
-export async function signPayslip(payslipId: string) {
+export async function signPayslip(payslipId: string, signatureData?: string) {
   const supabase = await createClient()
+  const updateData: Record<string, any> = { signed_at: new Date().toISOString() }
+  if (signatureData) updateData.signature_data = signatureData
+
   const { data, error } = await supabase
     .from('salary_payslips')
-    .update({ signed_at: new Date().toISOString() })
+    .update(updateData)
     .eq('id', payslipId)
     .select()
     .single()

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 
 // --- SVGs ---
 function IconBriefcase() {
@@ -98,6 +99,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const params = await searchParams;
   const filter = params.filter || 'last7days';
   const tab = params.tab || 'financial';
+
+  // Check role - staff should not be here
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    
+    if (profile?.role === 'staff') {
+      redirect('/dashboard/salary')
+    }
+  }
 
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];

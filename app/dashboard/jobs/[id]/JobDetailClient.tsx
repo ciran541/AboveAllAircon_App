@@ -10,6 +10,7 @@ import { updateJobFields, deleteJob as deleteJobAction, updateJobStage } from "@
 import { logJobMaterial, removeJobMaterial } from "@/app/actions/inventoryActions";
 import { updateCustomerDetails } from "@/app/actions/customerActions";
 import { JOB_STAGES as STAGES, getStageDisplay, getStageDB, UNIT_TYPES } from "@/lib/constants";
+import { TimePickerUncontrolled } from "@/components/TimePicker";
 
 export default function JobDetailClient({
   initialJob,
@@ -502,7 +503,7 @@ export default function JobDetailClient({
                     </div>
                     <div>
                       <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Time</div>
-                      {isEditing ? <input type="time" name="visit_time" defaultValue={job.visit_time} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{formatTime12h(job.visit_time)}</div>}
+                      {isEditing ? <TimePickerUncontrolled name="visit_time" defaultValue={job.visit_time} /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{formatTime12h(job.visit_time)}</div>}
                     </div>
                   </div>
                 </div>
@@ -517,7 +518,7 @@ export default function JobDetailClient({
                     </div>
                     <div>
                       <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Time</div>
-                      {isEditing ? <input type="time" name="job_time" defaultValue={job.job_time} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{formatTime12h(job.job_time)}</div>}
+                      {isEditing ? <TimePickerUncontrolled name="job_time" defaultValue={job.job_time} /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{formatTime12h(job.job_time)}</div>}
                     </div>
                   </div>
                 </div>
@@ -533,7 +534,7 @@ export default function JobDetailClient({
                       </div>
                       <div>
                         <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 }}>Time</div>
-                        {isEditing ? <input type="time" name="second_visit_time" defaultValue={job.second_visit_time} className="form-input" /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{formatTime12h(job.second_visit_time)}</div>}
+                        {isEditing ? <TimePickerUncontrolled name="second_visit_time" defaultValue={job.second_visit_time} /> : <div style={{ fontSize: 13, fontWeight: 600 }}>{formatTime12h(job.second_visit_time)}</div>}
                       </div>
                     </div>
                   </div>

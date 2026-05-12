@@ -29,7 +29,23 @@ export default function LoginPage() {
       return
     }
 
-    router.push('/dashboard')
+    // Get user profile to check role
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      if (profile?.role === 'staff') {
+        router.push('/dashboard/salary')
+      } else {
+        router.push('/dashboard')
+      }
+    } else {
+      router.push('/dashboard')
+    }
     router.refresh()
   }
 

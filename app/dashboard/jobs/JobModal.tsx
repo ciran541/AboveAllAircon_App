@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import TimePicker from "@/components/TimePicker";
 import { Job, STAGES } from "./JobsClient";
 import { saveJob } from "@/app/actions/jobActions";
 import { createClient } from "@/lib/supabase/client";
@@ -287,7 +288,7 @@ export default function JobModal({
                 </div>
                 <div className="form-group">
                   <label className="form-label">Visit Time *</label>
-                  <input type="time" required className="form-input" value={formData.visit_time || ""} onChange={(e) => setFormData({ ...formData, visit_time: e.target.value })} />
+                  <TimePicker value={formData.visit_time || ""} onChange={(val) => setFormData({ ...formData, visit_time: val })} />
                 </div>
               </div>
             </div>

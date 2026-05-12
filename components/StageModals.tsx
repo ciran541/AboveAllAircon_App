@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import TimePicker from "@/components/TimePicker";
 
 // ── SITE VISIT MODAL ────────────────────────────────────────────────────────
 export function SiteVisitModal({
@@ -43,7 +44,7 @@ export function SiteVisitModal({
             </div>
             <div className="form-group">
               <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Time</label>
-              <input type="time" className="form-input" style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: "8px" }} value={svTime} onChange={(e) => setSvTime(e.target.value)} />
+              <TimePicker value={svTime} onChange={(val) => setSvTime(val)} />
             </div>
           </div>
           <div className="form-group">
@@ -84,25 +85,20 @@ export function QuotationModal({
   const [qAmount, setQAmount] = useState(job?.quoted_amount || 0);
   const [qNotes, setQNotes] = useState("");
   const [qEngineer, setQEngineer] = useState(job?.engineer_name || "Jackie");
-  const [qCustomBreakdown, setQCustomBreakdown] = useState(job?.quotation_breakdown || `Mitsubishi Starmex R32 4Ticks
+  const [qCustomBreakdown, setQCustomBreakdown] = useState(job?.quotation_breakdown || `Mitsubishi Starmex R32 5Ticks
 
-MUYGP24VF2 (Outdoor Unit)
-MSYGP24VF (Indoor Unit)
-24k BTU - $2030nett
-System 1
-
-Mitsubishi Starmex R32 5Ticks
-
-MXY2H20VF (Outdoor Unit)
-MSXYFP13VG x 2 (Indoor Unit)
-12k, 12k BTU - $2360nett
-System 2 
+MXY4H33VG (Outdoor Unit)
+MSXYFP24VG (Indoor Unit)
+MSXYFP13VG x 1 (Indoor Unit)
+MSXYFP10VG x 3 (Indoor Unit)
+24k, 12k, 9k, 9k BTU - $4380nett
+System 4
 
 A water pump is required - $200nett
 
-x2 stainless-steel brackets - $300nett ($150/each)
+1x stainless steel bracket - $150nett
 
- Total: $4890nett`);
+Total: $4730nett`);
   const [qMaterials, setQMaterials] = useState(job?.quotation_materials || `✔22g copper pipings
 ✔Keystone cables 3c40/3c70 (local brand)
 ✔1/2 inch class 0 kflex
@@ -284,7 +280,7 @@ export function ConfirmJobModal({
             </div>
             <div className="form-group">
               <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Job Time</label>
-              <input type="time" className="form-input" style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: "8px" }} value={cjTime} onChange={(e) => setCjTime(e.target.value)} />
+              <TimePicker value={cjTime} onChange={(val) => setCjTime(val)} />
             </div>
           </div>
 
@@ -373,7 +369,7 @@ export function SecondVisitModal({
             </div>
             <div className="form-group">
               <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>Visit Time</label>
-              <input type="time" className="form-input" style={{ width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0", borderRadius: "8px" }} value={svTime} onChange={(e) => setSvTime(e.target.value)} />
+              <TimePicker value={svTime} onChange={(val) => setSvTime(val)} />
             </div>
           </div>
           <div style={{ display: "flex", gap: 12, marginTop: 8 }}>

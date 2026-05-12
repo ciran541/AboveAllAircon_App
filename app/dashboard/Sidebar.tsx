@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
@@ -11,6 +12,8 @@ interface SidebarProps {
   email: string
   fullName?: string
   role: UserRole
+  isOpen?: boolean
+  onClose?: () => void
 }
 
 // ── SVG Icons ───────────────────────────────────────────────────────────────
@@ -60,6 +63,14 @@ function IconLogout() {
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  )
+}
+
+function IconX() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   )
 }
@@ -121,10 +132,14 @@ function getInitials(name: string, email: string) {
   return email.substring(0, 2).toUpperCase()
 }
 
-export default function Sidebar({ email, fullName = '', role }: SidebarProps) {
+export default function Sidebar({ email, fullName = '', role, isOpen, onClose }: SidebarProps) {
   const router = useRouter()
   const pathname = usePathname()
-  // Staff can only see the Salary module
+  // Close sidebar when route changes on mobile
+  useEffect(() => {
+    if (onClose) onClose()
+  }, [pathname])
+
   const navItems = role === 'staff'
     ? NAV_ITEMS.filter(item => item.href === '/dashboard/salary')
     : NAV_ITEMS
@@ -138,20 +153,25 @@ export default function Sidebar({ email, fullName = '', role }: SidebarProps) {
   }
 
   return (
-    <aside className="sidebar">
-      {/* Logo */}
-      <div className="sidebar-header">
-        <div className="sidebar-logo">
-          <Image 
-            src="/logo.png" 
-            alt="Above All Aircon" 
-            width={160} 
-            height={48} 
-            priority
-            style={{ objectFit: 'contain' }}
-          />
+    <>
+      <div className={`sidebar-overlay ${isOpen ? 'open' : ''}`} onClick={onClose} />
+      <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+        {/* Logo & Close */}
+        <div className="sidebar-header" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="sidebar-logo">
+            <Image 
+              src="/logo.png" 
+              alt="Above All Aircon" 
+              width={140} 
+              height={40} 
+              priority
+              style={{ objectFit: 'contain' }}
+            />
+          </div>
+          <button className="mobile-menu-btn" onClick={onClose} style={{ padding: 4 }}>
+            <IconX />
+          </button>
         </div>
-      </div>
 
       {/* Navigation */}
       <nav className="sidebar-nav">
@@ -192,6 +212,7 @@ export default function Sidebar({ email, fullName = '', role }: SidebarProps) {
           Sign out
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   )
 }

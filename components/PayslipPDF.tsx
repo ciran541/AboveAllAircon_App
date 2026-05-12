@@ -173,8 +173,10 @@ export interface PayslipData {
   additionalOt: number;
   totalOt: number;
   totalOtAmount: number;
+  totalBonus?: number;
   totalSalary: number;
   signedAt: string | null;
+  signatureData?: string;
 }
 
 const formatCurrency = (n: number) => `S$${n.toFixed(2)}`;
@@ -243,6 +245,13 @@ const PayslipPDF: React.FC<{ data: PayslipData }> = ({ data }) => {
               </Text>
               <Text style={styles.tableCellValue}>{formatCurrency(data.totalOtAmount)}</Text>
             </View>
+
+            {(data.totalBonus ?? 0) > 0 && (
+              <View style={styles.tableRow}>
+                <Text style={styles.tableCellDesc}>Bonus</Text>
+                <Text style={styles.tableCellValue}>{formatCurrency(data.totalBonus ?? 0)}</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -252,6 +261,12 @@ const PayslipPDF: React.FC<{ data: PayslipData }> = ({ data }) => {
             <Text style={styles.totalLabel}>Total OT Amount:</Text>
             <Text style={styles.totalValue}>{formatCurrency(data.totalOtAmount)}</Text>
           </View>
+          {(data.totalBonus ?? 0) > 0 && (
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total Bonus:</Text>
+              <Text style={styles.totalValue}>{formatCurrency(data.totalBonus ?? 0)}</Text>
+            </View>
+          )}
           <View style={styles.grandTotalRow}>
             <Text style={styles.grandTotalLabel}>Net Salary:</Text>
             <Text style={styles.grandTotalValue}>{formatCurrency(data.totalSalary)}</Text>
@@ -260,6 +275,11 @@ const PayslipPDF: React.FC<{ data: PayslipData }> = ({ data }) => {
 
         {/* Signature */}
         <View style={styles.signatureBlock}>
+          {data.signatureData ? (
+            <View style={{ marginBottom: 4 }}>
+              <Image src={data.signatureData} style={{ width: 180, height: 60, objectFit: 'contain' }} />
+            </View>
+          ) : null}
           <View style={styles.signatureLine}>
             {data.signedAt ? (
               <Text style={styles.signatureText}>

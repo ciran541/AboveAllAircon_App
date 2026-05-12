@@ -242,6 +242,7 @@ export interface InvoiceData {
   cvRedeemed?: boolean;
   cvAmount?: number;
   paymentCompany?: 'Above All Aircon' | 'Letswork';
+  hideSupplyDesc?: boolean;
 }
 
 interface InvoicePDFProps {
@@ -358,21 +359,25 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
               </View>
 
               {/* Row 2.1: Supply */}
-              <View style={styles.tableRow}>
-                <View style={[styles.tdNo, { paddingTop: 7 }]}>
-                  <Text>2</Text>
+              {!data.hideSupplyDesc && (
+                <View style={styles.tableRow}>
+                  <View style={[styles.tdNo, { paddingTop: 7 }]}>
+                    <Text>2</Text>
+                  </View>
+                  <View style={[styles.tdDesc, { paddingTop: 7, paddingBottom: 0 }]}>
+                    <Text style={styles.descItem}>{data.supplyDesc}</Text>
+                  </View>
+                  <View style={styles.tdQty} />
+                  <View style={styles.tdAmt} />
                 </View>
-                <View style={[styles.tdDesc, { paddingTop: 7, paddingBottom: 0 }]}>
-                  <Text style={styles.descItem}>{data.supplyDesc}</Text>
-                </View>
-                <View style={styles.tdQty} />
-                <View style={styles.tdAmt} />
-              </View>
+              )}
 
               {/* Row 2.2: Brand */}
               <View style={styles.tableRow}>
-                <View style={styles.tdNo} />
-                <View style={[styles.tdDesc, { paddingTop: 4, paddingBottom: 0 }]}>
+                <View style={[styles.tdNo, { paddingTop: data.hideSupplyDesc ? 7 : 0 }]}>
+                  {data.hideSupplyDesc && <Text>2</Text>}
+                </View>
+                <View style={[styles.tdDesc, { paddingTop: data.hideSupplyDesc ? 7 : 4, paddingBottom: 0 }]}>
                   <Text style={styles.descBold}>{data.brandHeading}</Text>
                 </View>
                 <View style={styles.tdQty} />

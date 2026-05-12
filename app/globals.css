@@ -1306,3 +1306,78 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   gap: 16px;
 }
 
+/* ─── Mobile Responsiveness ──────────────────────────────────────────────── */
+.mobile-topbar {
+  display: none;
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.mobile-menu-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 100;
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    position: fixed;
+    left: -240px;
+    top: 0;
+    bottom: 0;
+    z-index: 101;
+    transition: left 0.3s ease;
+    box-shadow: none;
+  }
+
+  .sidebar.open {
+    left: 0;
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.1);
+  }
+
+  .sidebar-overlay.open {
+    display: block;
+  }
+
+  .mobile-topbar {
+    display: flex;
+  }
+
+  .dashboard-shell {
+    flex-direction: column;
+  }
+
+  .dashboard-main {
+    height: calc(100vh - 61px);
+  }
+
+  .dashboard-topbar {
+    padding: 16px;
+  }
+
+  .dashboard-content {
+    padding: 16px;
+  }
+}
+
+

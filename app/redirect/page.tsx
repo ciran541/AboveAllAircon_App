@@ -6,7 +6,17 @@ export default async function RedirectPage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   if (user) {
-    redirect('/dashboard')
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.role === 'staff') {
+      redirect('/dashboard/salary')
+    } else {
+      redirect('/dashboard')
+    }
   } else {
     redirect('/login')
   }

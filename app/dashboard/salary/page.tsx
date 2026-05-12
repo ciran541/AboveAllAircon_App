@@ -42,6 +42,14 @@ export default async function SalaryPage() {
     .lt('entry_date', endDate)
     .order('entry_date')
 
+  // Get bonus entries for current month
+  const { data: bonusEntries } = await supabase
+    .from('bonus_entries')
+    .select('*')
+    .gte('entry_date', startDate)
+    .lt('entry_date', endDate)
+    .order('entry_date')
+
   return (
     <SalaryClient
       role={authUser.role}
@@ -49,6 +57,7 @@ export default async function SalaryPage() {
       initialWorkers={workers ?? []}
       initialPayslips={payslips ?? []}
       initialOtEntries={otEntries ?? []}
+      initialBonusEntries={bonusEntries ?? []}
       initialMonth={currentMonth}
       initialYear={currentYear}
     />

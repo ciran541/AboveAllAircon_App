@@ -70,6 +70,36 @@ export async function deleteOtEntry(id: string) {
   return SalaryService.deleteOtEntry(id);
 }
 
+// ── Bonus Entries ─────────────────────────────────────────────────────────────
+
+export async function getBonusEntries(month: number, year: number) {
+  return SalaryService.getBonusEntries(month, year);
+}
+
+export async function addBonusEntry(entry: {
+  worker_id: string;
+  entry_date: string;
+  amount: number;
+  notes?: string;
+}) {
+  const user = await getAuthUser();
+  return SalaryService.addBonusEntry(entry, user.id);
+}
+
+export async function addBulkBonusEntries(entries: Array<{
+  worker_id: string;
+  entry_date: string;
+  amount: number;
+  notes?: string;
+}>) {
+  const user = await getAuthUser();
+  return SalaryService.addBulkBonusEntries(entries, user.id);
+}
+
+export async function deleteBonusEntry(id: string) {
+  return SalaryService.deleteBonusEntry(id);
+}
+
 // ── Payslips ──────────────────────────────────────────────────────────────────
 
 export async function getPayslips(month: number, year: number) {
@@ -82,6 +112,6 @@ export async function createMonthlyPayslips(month: number, year: number, working
   return SalaryService.createMonthlyPayslips(month, year, workingDays);
 }
 
-export async function signPayslip(payslipId: string) {
-  return SalaryService.signPayslip(payslipId);
+export async function signPayslip(payslipId: string, signatureData?: string) {
+  return SalaryService.signPayslip(payslipId, signatureData);
 }
