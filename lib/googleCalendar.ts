@@ -121,7 +121,7 @@ function buildStartEnd(date: string, time: string | null): { start: string; end:
   const [hourText = "09", minuteText = "00"] = safeTime.split(":");
   const hour = Number(hourText);
   const minute = Number(minuteText);
-  const endHour = Number.isFinite(hour) ? Math.min(hour + 2, 23) : 11;
+  const endHour = Number.isFinite(hour) ? Math.min(hour + 1, 23) : 10;
   const endMinute = Number.isFinite(minute) ? minute : 0;
   const end = `${date}T${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}:00+08:00`;
 
