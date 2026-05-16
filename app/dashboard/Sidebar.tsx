@@ -115,7 +115,6 @@ function IconSalary() {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: <IconDashboard /> },
   { href: '/dashboard/jobs', label: 'Jobs', icon: <IconJobs /> },
   { href: '/dashboard/customers', label: 'Customers', icon: <IconUsers /> },
   { href: '/dashboard/inventory', label: 'Inventory', icon: <IconInventory /> },

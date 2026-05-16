@@ -15,7 +15,7 @@ export default async function RedirectPage() {
     if (profile?.role === 'staff') {
       redirect('/dashboard/salary')
     } else {
-      redirect('/dashboard')
+      redirect('/dashboard/jobs')
     }
   } else {
     redirect('/login')

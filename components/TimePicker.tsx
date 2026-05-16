@@ -387,8 +387,8 @@ export default function TimePicker({
         onClick={handleOpen}
         style={{
           width: "100%",
-          padding: "9px 12px",
-          border: open ? "2px solid #3b82f6" : "1px solid #e2e8f0",
+          padding: "10px 13px",
+          border: open ? "2px solid #3b82f6" : "1.5px solid #e2e8f0",
           borderRadius: 8,
           background: "#fff",
           cursor: "pointer",
@@ -404,12 +404,14 @@ export default function TimePicker({
           fontFamily: "inherit",
         }}
       >
-        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={open ? "#3b82f6" : "#94a3b8"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={open ? "#3b82f6" : "#94a3b8"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
             <circle cx="12" cy="12" r="10" />
             <polyline points="12 6 12 12 16 14" />
           </svg>
-          {displayText}
+          <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {displayText}
+          </span>
         </span>
         <svg
           width="12" height="12" viewBox="0 0 24 24" fill="none"
