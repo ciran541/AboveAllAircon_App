@@ -31,7 +31,24 @@ export default function NavigationProgress() {
       const anchor = (e.target as HTMLElement).closest("a");
       if (!anchor) return;
       const href = anchor.getAttribute("href");
-      if (!href || href.startsWith("http") || href.startsWith("#") || href.startsWith("mailto:")) return;
+      if (!href) return;
+
+      const isDownload = anchor.hasAttribute("download");
+      const isNewTab = anchor.getAttribute("target") === "_blank";
+
+      // Skip progress bar for external, hash, mailto, tel, blob, download, or new tab links
+      if (
+        href.startsWith("http") ||
+        href.startsWith("#") ||
+        href.startsWith("mailto:") ||
+        href.startsWith("tel:") ||
+        href.startsWith("blob:") ||
+        isDownload ||
+        isNewTab
+      ) {
+        return;
+      }
+
       // Internal navigation — show progress bar
       const newPath = href.split("?")[0];
       if (newPath !== pathname) {

@@ -152,10 +152,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 1,
     paddingLeft: 4,
+    alignItems: 'flex-start',
   },
-  bullet: {
-    width: 10,
-    fontSize: 10.5,
+  bulletDot: {
+    width: 3.5,
+    height: 3.5,
+    borderRadius: 1.75,
+    backgroundColor: '#000000',
+    marginTop: 4.5,
+    marginRight: 6,
   },
   bulletText: {
     flex: 1,
@@ -250,12 +255,15 @@ interface InvoicePDFProps {
 }
 
 /** Small helper — one bullet point line */
-const Bullet: React.FC<{ text: string }> = ({ text }) => (
-  <View style={styles.bulletLine}>
-    <Text style={styles.bullet}>•</Text>
-    <Text style={styles.bulletText}>{text}</Text>
-  </View>
-);
+const Bullet: React.FC<{ text: string }> = ({ text }) => {
+  const cleanedText = text.replace(/^[•✔✅\-\*\s]+/, '');
+  return (
+    <View style={styles.bulletLine}>
+      <View style={styles.bulletDot} />
+      <Text style={styles.bulletText}>{cleanedText}</Text>
+    </View>
+  );
+};
 
 const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
   const logoUrl = '/logo.png';
