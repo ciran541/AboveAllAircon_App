@@ -228,17 +228,19 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
               padding: '8px 16px', borderRadius: 8, border: '1px solid #cbd5e1',
               background: '#fff', fontWeight: 600, cursor: 'pointer', color: '#475569',
             }}>Close</button>
-            <PDFDownloadLink document={<InvoicePDF data={data} />} fileName={`${isQuotation ? 'Quotation' : 'Invoice'}_${data.invoiceNo}.pdf`}>
-              {({ loading }) => (
-                <button disabled={loading} style={{
-                  padding: '8px 16px', borderRadius: 8, border: 'none',
-                  background: '#10b981', color: '#fff', fontWeight: 700,
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                }}>
-                  {loading ? 'Generating...' : '⬇ Download PDF'}
-                </button>
-              )}
-            </PDFDownloadLink>
+            <div onClickCapture={(e) => e.stopPropagation()}>
+              <PDFDownloadLink document={<InvoicePDF data={data} />} fileName={`${isQuotation ? 'Quotation' : 'Invoice'}_${data.invoiceNo}.pdf`}>
+                {({ loading }) => (
+                  <button disabled={loading} style={{
+                    padding: '8px 16px', borderRadius: 8, border: 'none',
+                    background: '#10b981', color: '#fff', fontWeight: 700,
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                  }}>
+                    {loading ? 'Generating...' : '⬇ Download PDF'}
+                  </button>
+                )}
+              </PDFDownloadLink>
+            </div>
           </div>
         </div>
 
