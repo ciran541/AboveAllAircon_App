@@ -252,7 +252,7 @@ interface InvoicePDFProps {
 /** Small helper — one bullet point line */
 const Bullet: React.FC<{ text: string }> = ({ text }) => (
   <View style={styles.bulletLine}>
-    <Text style={styles.bullet}>•</Text>
+    <Text style={styles.bullet}>-</Text>
     <Text style={styles.bulletText}>{text}</Text>
   </View>
 );
