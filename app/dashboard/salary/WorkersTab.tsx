@@ -5,15 +5,17 @@ import { useState } from 'react'
 interface Worker {
   id: string
   name: string
-  wp_number: string
   basic_salary: number
+  levy: number
   bank_account: string
+  wp_number: string
+  fin_no: string
 }
 
 interface WorkersTabProps {
   workers: Worker[]
   role: 'admin' | 'staff'
-  onCreateWorker: (data: { name: string; wp_number: string; basic_salary: number; bank_account: string }) => Promise<any>
+  onCreateWorker: (data: { name: string; wp_number: string; basic_salary: number; bank_account: string; fin_no: string; levy: number }) => Promise<any>
   onUpdateWorker: (id: string, data: Partial<Worker>) => Promise<any>
   onDeleteWorker: (id: string) => Promise<any>
 }
@@ -58,7 +60,7 @@ function formatCurrency(n: number) {
 export default function WorkersTab({ workers, role, onCreateWorker, onUpdateWorker, onDeleteWorker }: WorkersTabProps) {
   const [showModal, setShowModal] = useState(false)
   const [editWorker, setEditWorker] = useState<Worker | null>(null)
-  const [form, setForm] = useState({ name: '', wp_number: '', basic_salary: '', bank_account: '' })
+  const [form, setForm] = useState({ name: '', basic_salary: '', levy: '', bank_account: '', wp_number: '', fin_no: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
@@ -67,14 +69,14 @@ export default function WorkersTab({ workers, role, onCreateWorker, onUpdateWork
 
   function openCreate() {
     setEditWorker(null)
-    setForm({ name: '', wp_number: '', basic_salary: '', bank_account: '' })
+    setForm({ name: '', basic_salary: '', levy: '', bank_account: '', wp_number: '', fin_no: '' })
     setError(null)
     setShowModal(true)
   }
 
   function openEdit(w: Worker) {
     setEditWorker(w)
-    setForm({ name: w.name, wp_number: w.wp_number, basic_salary: String(w.basic_salary), bank_account: w.bank_account })
+    setForm({ name: w.name, basic_salary: String(w.basic_salary), levy: String(w.levy ?? 0), bank_account: w.bank_account, wp_number: w.wp_number, fin_no: w.fin_no ?? '' })
     setError(null)
     setShowModal(true)
   }
@@ -85,12 +87,13 @@ export default function WorkersTab({ workers, role, onCreateWorker, onUpdateWork
     setLoading(true)
     const salary = parseFloat(form.basic_salary)
     if (isNaN(salary) || salary <= 0) { setError('Invalid salary'); setLoading(false); return }
+    const levy = parseFloat(form.levy) || 0
 
     let result
     if (editWorker) {
-      result = await onUpdateWorker(editWorker.id, { name: form.name, wp_number: form.wp_number, basic_salary: salary, bank_account: form.bank_account })
+      result = await onUpdateWorker(editWorker.id, { name: form.name, basic_salary: salary, levy, bank_account: form.bank_account, wp_number: form.wp_number, fin_no: form.fin_no })
     } else {
-      result = await onCreateWorker({ name: form.name, wp_number: form.wp_number, basic_salary: salary, bank_account: form.bank_account })
+      result = await onCreateWorker({ name: form.name, basic_salary: salary, levy, bank_account: form.bank_account, wp_number: form.wp_number, fin_no: form.fin_no })
     }
     setLoading(false)
     if (result?.error) { setError(result.error); return }
@@ -135,19 +138,19 @@ export default function WorkersTab({ workers, role, onCreateWorker, onUpdateWork
       <div style={{ background: '#fff', border: '1px solid #e4e9f0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
         <div style={{ overflowX: 'auto' }}>
           {/* Desktop table */}
-          <div className="workers-desktop-table" style={{ minWidth: 600 }}>
+          <div className="workers-desktop-table" style={{ minWidth: 700 }}>
             <div style={{
-              display: 'grid', gridTemplateColumns: isAdmin ? '1.5fr 1fr 1fr 1.2fr 80px' : '1.5fr 1fr 1fr 1.2fr',
+              display: 'grid', gridTemplateColumns: isAdmin ? '1.5fr 1fr 0.8fr 1.2fr 0.8fr 1fr 80px' : '1.5fr 1fr 0.8fr 1.2fr 0.8fr 1fr',
               gap: 12, padding: '10px 20px', background: '#f8fafc', borderBottom: '1px solid #e4e9f0',
             }}>
-              {['Name', 'WP Number', 'Basic Salary', 'Bank Account', ...(isAdmin ? ['Actions'] : [])].map(h => (
+              {['Name', 'Salary', 'Levy', 'Bank Account', 'Work Permit', 'FIN No.', ...(isAdmin ? ['Actions'] : [])].map(h => (
                 <div key={h} style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.8px' }}>{h}</div>
               ))}
             </div>
 
             {workers.map((w, i) => (
               <div key={w.id} style={{
-                display: 'grid', gridTemplateColumns: isAdmin ? '1.5fr 1fr 1fr 1.2fr 80px' : '1.5fr 1fr 1fr 1.2fr',
+                display: 'grid', gridTemplateColumns: isAdmin ? '1.5fr 1fr 0.8fr 1.2fr 0.8fr 1fr 80px' : '1.5fr 1fr 0.8fr 1.2fr 0.8fr 1fr',
                 gap: 12, padding: '14px 20px',
                 borderBottom: i < workers.length - 1 ? '1px solid #f1f5f9' : 'none',
                 alignItems: 'center', transition: 'background 0.12s',
@@ -156,9 +159,11 @@ export default function WorkersTab({ workers, role, onCreateWorker, onUpdateWork
                 onMouseLeave={e => e.currentTarget.style.background = ''}
               >
                 <div style={{ fontSize: 13.5, fontWeight: 600, color: '#111827' }}>{w.name}</div>
-                <div style={{ fontSize: 13, color: '#4b5563', fontFamily: 'monospace' }}>{w.wp_number || '—'}</div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{formatCurrency(w.basic_salary)}</div>
+                <div style={{ fontSize: 13, color: '#4b5563' }}>{w.levy ? formatCurrency(w.levy) : '—'}</div>
                 <div style={{ fontSize: 13, color: '#4b5563' }}>{w.bank_account || '—'}</div>
+                <div style={{ fontSize: 13, color: '#4b5563', fontFamily: 'monospace' }}>{w.wp_number || '—'}</div>
+                <div style={{ fontSize: 13, color: '#4b5563', fontFamily: 'monospace' }}>{w.fin_no || '—'}</div>
                 {isAdmin && (
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button onClick={() => openEdit(w)} style={{
@@ -184,39 +189,47 @@ export default function WorkersTab({ workers, role, onCreateWorker, onUpdateWork
           {/* Mobile cards */}
           <div className="workers-mobile-cards">
             {workers.map((w, i) => (
-              <div key={w.id + '-card'} style={{ 
-                padding: 16, 
+              <div key={w.id + '-card'} style={{
+                padding: 16,
                 borderBottom: i < workers.length - 1 ? '1px solid #f1f5f9' : 'none',
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{w.name}</div>
-                    <div style={{ fontSize: 12, color: '#64748b', fontFamily: 'monospace', marginTop: 2 }}>{w.wp_number || 'No WP'}</div>
-                  </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{w.name}</div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{formatCurrency(w.basic_salary)}</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', marginTop: 2 }}>Basic</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', marginTop: 2 }}>Salary</div>
                   </div>
                 </div>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, color: '#4b5563' }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Levy</span>
+                    {w.levy ? formatCurrency(w.levy) : '—'}
+                  </div>
                   <div style={{ fontSize: 13, color: '#4b5563' }}>
                     <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Bank Account</span>
                     {w.bank_account || '—'}
                   </div>
-                  {isAdmin && (
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => openEdit(w)} style={{
-                        padding: '6px 12px', background: '#f8fafc', border: '1px solid #e4e9f0', borderRadius: 6,
-                        fontSize: 12, fontWeight: 600, color: '#64748b', cursor: 'pointer'
-                      }}>Edit</button>
-                      <button onClick={() => handleDelete(w.id)} style={{
-                        padding: '6px 12px', background: '#fff1f2', border: '1px solid #fecaca', borderRadius: 6,
-                        fontSize: 12, fontWeight: 600, color: '#dc2626', cursor: 'pointer'
-                      }}>Remove</button>
-                    </div>
-                  )}
+                  <div style={{ fontSize: 13, color: '#4b5563', fontFamily: 'monospace' }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 2, fontFamily: 'inherit' }}>Work Permit</span>
+                    {w.wp_number || '—'}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#4b5563', fontFamily: 'monospace' }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 2, fontFamily: 'inherit' }}>FIN No.</span>
+                    {w.fin_no || '—'}
+                  </div>
                 </div>
+                {isAdmin && (
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button onClick={() => openEdit(w)} style={{
+                      padding: '6px 12px', background: '#f8fafc', border: '1px solid #e4e9f0', borderRadius: 6,
+                      fontSize: 12, fontWeight: 600, color: '#64748b', cursor: 'pointer'
+                    }}>Edit</button>
+                    <button onClick={() => handleDelete(w.id)} style={{
+                      padding: '6px 12px', background: '#fff1f2', border: '1px solid #fecaca', borderRadius: 6,
+                      fontSize: 12, fontWeight: 600, color: '#dc2626', cursor: 'pointer'
+                    }}>Remove</button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -245,16 +258,24 @@ export default function WorkersTab({ workers, role, onCreateWorker, onUpdateWork
                 <input className="form-input" required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Ahmad Razali" />
               </div>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>WP Number</label>
-                <input className="form-input" value={form.wp_number} onChange={e => setForm(f => ({ ...f, wp_number: e.target.value }))} placeholder="Work permit number" />
-              </div>
-              <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>Basic Salary (SGD) *</label>
                 <input className="form-input" type="number" step="0.01" min="0" required value={form.basic_salary} onChange={e => setForm(f => ({ ...f, basic_salary: e.target.value }))} placeholder="e.g. 2000" />
               </div>
               <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>Levy (SGD)</label>
+                <input className="form-input" type="number" step="0.01" min="0" value={form.levy} onChange={e => setForm(f => ({ ...f, levy: e.target.value }))} placeholder="e.g. 300" />
+              </div>
+              <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>Bank Account</label>
                 <input className="form-input" value={form.bank_account} onChange={e => setForm(f => ({ ...f, bank_account: e.target.value }))} placeholder="e.g. POSB 123-45678-9" />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>Work Permit No.</label>
+                <input className="form-input" value={form.wp_number} onChange={e => setForm(f => ({ ...f, wp_number: e.target.value }))} placeholder="Work permit number" />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>FIN No.</label>
+                <input className="form-input" value={form.fin_no} onChange={e => setForm(f => ({ ...f, fin_no: e.target.value }))} placeholder="e.g. S1234567D" />
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 18, borderTop: '1px solid #e4e9f0' }}>
                 <button type="button" onClick={() => setShowModal(false)} disabled={loading} style={{ padding: '9px 18px', background: '#fff', border: '1.5px solid #e4e9f0', borderRadius: 8, fontSize: 13.5, fontWeight: 500, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>

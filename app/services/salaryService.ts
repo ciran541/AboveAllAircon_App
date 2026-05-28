@@ -31,6 +31,8 @@ export async function createWorker(worker: {
   wp_number?: string
   basic_salary: number
   bank_account?: string
+  fin_no?: string
+  levy?: number
 }) {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -40,6 +42,8 @@ export async function createWorker(worker: {
       wp_number: worker.wp_number ?? '',
       basic_salary: worker.basic_salary,
       bank_account: worker.bank_account ?? '',
+      fin_no: worker.fin_no ?? '',
+      levy: worker.levy ?? 0,
     }])
     .select()
     .single()
@@ -56,6 +60,8 @@ export async function updateWorker(
     wp_number: string
     basic_salary: number
     bank_account: string
+    fin_no: string
+    levy: number
   }>
 ) {
   const supabase = await createClient()

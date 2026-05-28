@@ -1224,6 +1224,73 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   transition-duration: 0.05s;
 }
 
+/* ─── Pipeline v2: GPU-accelerated cards ─────────────────────────────────── */
+.job-card-v2 {
+  contain: layout style;
+  will-change: transform;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+}
+
+.job-card-v2:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px -3px rgba(0, 0, 0, 0.09);
+  border-color: #d4dae6 !important;
+}
+
+.job-card-v2:active {
+  transform: scale(0.985);
+  transition-duration: 0.06s;
+}
+
+/* drop-target highlight on column */
+.pipeline-col-drop-target {
+  box-shadow: inset 0 0 0 2px var(--accent) !important;
+}
+
+/* delete button hover — only visible on card hover */
+.job-card-v2 .job-card-delete-btn { opacity: 0; }
+.job-card-v2:hover .job-card-delete-btn { opacity: 1; }
+.job-card-delete-btn:hover { background: #fef2f2 !important; color: #ef4444 !important; }
+
+/* Delete button inside job card */
+.job-card-delete-btn:hover {
+  background: #fef2f2 !important;
+  color: #ef4444 !important;
+}
+
+/* Pipeline column drop target highlight */
+.pipeline-col-drop-target {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+  background: #eff6ff !important;
+}
+
+/* Pipeline v2 filter bar */
+.pipeline-filter-select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  font-size: 13.5px;
+  background: #fff;
+  color: #334155;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  height: 38px;
+}
+.pipeline-filter-select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
+
+/* List view row hover */
+.list-row-v2:hover {
+  background: #f8fafc;
+}
+.list-row-v2 {
+  transition: background 0.1s ease;
+}
+
 /* ─── Perceived Performance: Skeleton Loading Page ───────────────────────── */
 .skel-pipeline-container {
   display: flex;

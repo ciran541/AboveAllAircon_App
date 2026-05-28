@@ -14,6 +14,8 @@ export async function createWorker(data: {
   wp_number?: string;
   basic_salary: number;
   bank_account?: string;
+  fin_no?: string;
+  levy?: number;
 }) {
   const user = await getAuthUser();
   if (user.role !== "admin") return { error: "Unauthorized" };
@@ -27,6 +29,8 @@ export async function updateWorker(
     wp_number: string;
     basic_salary: number;
     bank_account: string;
+    fin_no: string;
+    levy: number;
   }>
 ) {
   const user = await getAuthUser();
