@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 
 interface Worker {
   id: string
@@ -57,7 +57,7 @@ function formatCurrency(n: number) {
   return new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' }).format(n)
 }
 
-export default function WorkersTab({ workers, role, onCreateWorker, onUpdateWorker, onDeleteWorker }: WorkersTabProps) {
+const WorkersTab = memo(function WorkersTab({ workers, role, onCreateWorker, onUpdateWorker, onDeleteWorker }: WorkersTabProps) {
   const [showModal, setShowModal] = useState(false)
   const [editWorker, setEditWorker] = useState<Worker | null>(null)
   const [form, setForm] = useState({ name: '', basic_salary: '', levy: '', bank_account: '', wp_number: '', fin_no: '' })
@@ -309,4 +309,6 @@ export default function WorkersTab({ workers, role, onCreateWorker, onUpdateWork
       `}</style>
     </>
   )
-}
+})
+
+export default WorkersTab

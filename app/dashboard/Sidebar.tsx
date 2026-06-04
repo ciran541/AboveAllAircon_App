@@ -114,11 +114,20 @@ function IconSalary() {
   )
 }
 
+function IconAnalytics() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
+    </svg>
+  )
+}
+
 const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard/jobs', label: 'Jobs', icon: <IconJobs /> },
   { href: '/dashboard/customers', label: 'Customers', icon: <IconUsers /> },
   { href: '/dashboard/inventory', label: 'Inventory', icon: <IconInventory /> },
   { href: '/dashboard/salary', label: 'Salary', icon: <IconSalary /> },
+  { href: '/dashboard/analytics', label: 'Analytics', icon: <IconAnalytics /> },
 ]
 
 function getInitials(name: string, email: string) {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, memo } from 'react'
 
 interface Worker { id: string; name: string }
 interface OtEntry { id: string; worker_id: string; entry_date: string; hours: number; notes: string; created_by: string }
@@ -28,7 +28,7 @@ function IconX() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
 }
 
-export default function OtEntriesTab({ workers, entries, month, year, userId, onAddEntry, onAddBulkEntries, onDeleteEntry }: OtEntriesTabProps) {
+const OtEntriesTab = memo(function OtEntriesTab({ workers, entries, month, year, userId, onAddEntry, onAddBulkEntries, onDeleteEntry }: OtEntriesTabProps) {
   const [showModal, setShowModal] = useState(false)
   const [bulkForm, setBulkForm] = useState<{ entry_date: string; notes: string; hours: Record<string, string> }>({ entry_date: '', notes: '', hours: {} })
   const [loading, setLoading] = useState(false)
@@ -37,17 +37,17 @@ export default function OtEntriesTab({ workers, entries, month, year, userId, on
   // Custom confirm state
   const [confirmDialog, setConfirmDialog] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void } | null>(null)
 
-  // Group entries by worker
-  const byWorker: Record<string, { worker: Worker; entries: OtEntry[]; total: number }> = {}
-  for (const w of workers) {
-    byWorker[w.id] = { worker: w, entries: [], total: 0 }
-  }
-  for (const e of entries) {
-    if (byWorker[e.worker_id]) {
-      byWorker[e.worker_id].entries.push(e)
-      byWorker[e.worker_id].total += Number(e.hours)
+  const byWorker = useMemo(() => {
+    const map: Record<string, { worker: Worker; entries: OtEntry[]; total: number }> = {}
+    for (const w of workers) map[w.id] = { worker: w, entries: [], total: 0 }
+    for (const e of entries) {
+      if (map[e.worker_id]) {
+        map[e.worker_id].entries.push(e)
+        map[e.worker_id].total += Number(e.hours)
+      }
     }
-  }
+    return map
+  }, [workers, entries])
 
   function openAdd() {
     setBulkForm({ entry_date: '', notes: '', hours: {} })
@@ -98,7 +98,7 @@ export default function OtEntriesTab({ workers, entries, month, year, userId, on
     })
   }
 
-  const workerList = Object.values(byWorker).sort((a, b) => a.worker.name.localeCompare(b.worker.name))
+  const workerList = useMemo(() => Object.values(byWorker).sort((a, b) => a.worker.name.localeCompare(b.worker.name)), [byWorker])
 
   return (
     <>
@@ -248,4 +248,6 @@ export default function OtEntriesTab({ workers, entries, month, year, userId, on
       )}
     </>
   )
-}
+})
+
+export default OtEntriesTab

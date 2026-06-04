@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, memo } from 'react'
 import dynamic from 'next/dynamic'
 import PayslipPDF, { type PayslipData } from '@/components/PayslipPDF'
 import SignatureModal from '@/components/SignatureModal'
@@ -46,7 +46,7 @@ function IconRefresh() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
 }
 
-export default function PayslipsTab({ payslips, otEntries, bonusEntries, workers, month, year, role, onCreatePayslips, onSignPayslip }: PayslipsTabProps) {
+const PayslipsTab = memo(function PayslipsTab({ payslips, otEntries, bonusEntries, workers, month, year, role, onCreatePayslips, onSignPayslip }: PayslipsTabProps) {
   const [creating, setCreating] = useState(false)
   const [workingDays, setWorkingDays] = useState(26)
   const [signingId, setSigningId] = useState<string | null>(null)
@@ -119,11 +119,10 @@ export default function PayslipsTab({ payslips, otEntries, bonusEntries, workers
     if (result?.error) setError(result.error)
   }
 
-  // Totals
-  const totalBasic = payslips.reduce((s, p) => s + Number(p.basic_salary), 0)
-  const totalOtAmt = payslips.reduce((s, p) => s + Number(p.total_ot_amount), 0)
-  const totalBonus = payslips.reduce((s, p) => s + Number(p.total_bonus || 0), 0)
-  const totalSalary = payslips.reduce((s, p) => s + Number(p.total_salary), 0)
+  const totalBasic = useMemo(() => payslips.reduce((s, p) => s + Number(p.basic_salary), 0), [payslips])
+  const totalOtAmt = useMemo(() => payslips.reduce((s, p) => s + Number(p.total_ot_amount), 0), [payslips])
+  const totalBonus = useMemo(() => payslips.reduce((s, p) => s + Number(p.total_bonus || 0), 0), [payslips])
+  const totalSalary = useMemo(() => payslips.reduce((s, p) => s + Number(p.total_salary), 0), [payslips])
 
   return (
     <>
@@ -377,4 +376,6 @@ export default function PayslipsTab({ payslips, otEntries, bonusEntries, workers
       `}</style>
     </>
   )
-}
+})
+
+export default PayslipsTab

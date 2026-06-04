@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import WorkersTab from './WorkersTab'
 import OtEntriesTab from './OtEntriesTab'
@@ -59,78 +59,78 @@ export default function SalaryClient({
   }
 
   // Worker actions
-  async function handleCreateWorker(data: any) {
+  const handleCreateWorker = useCallback(async (data: any) => {
     const result = await salaryActions.createWorker(data)
     if (result && !('error' in result) && result.worker) setWorkers(prev => [...prev, result.worker].sort((a, b) => a.name.localeCompare(b.name)))
     return result
-  }
+  }, [])
 
-  async function handleUpdateWorker(id: string, data: any) {
+  const handleUpdateWorker = useCallback(async (id: string, data: any) => {
     const result = await salaryActions.updateWorker(id, data)
     if (result && !('error' in result) && result.worker) setWorkers(prev => prev.map(w => w.id === id ? result.worker : w))
     return result
-  }
+  }, [])
 
-  async function handleDeleteWorker(id: string) {
+  const handleDeleteWorker = useCallback(async (id: string) => {
     const result = await salaryActions.deleteWorker(id)
     if (result && !('error' in result) && result.success) setWorkers(prev => prev.filter(w => w.id !== id))
     return result
-  }
+  }, [])
 
   // OT actions
-  async function handleAddOtEntry(data: any) {
+  const handleAddOtEntry = useCallback(async (data: any) => {
     const result = await salaryActions.addOtEntry(data)
     if (result && !('error' in result) && result.entry) setOtEntries(prev => [...prev, result.entry].sort((a: any, b: any) => a.entry_date.localeCompare(b.entry_date)))
     return result
-  }
+  }, [])
 
-  async function handleAddBulkOtEntries(entries: any[]) {
+  const handleAddBulkOtEntries = useCallback(async (entries: any[]) => {
     const result = await salaryActions.addBulkOtEntries(entries)
     if (result && !('error' in result) && result.entries) {
       setOtEntries(prev => [...prev, ...result.entries].sort((a: any, b: any) => a.entry_date.localeCompare(b.entry_date)))
     }
     return result
-  }
+  }, [])
 
-  async function handleDeleteOtEntry(id: string) {
+  const handleDeleteOtEntry = useCallback(async (id: string) => {
     const result = await salaryActions.deleteOtEntry(id)
     if (result && !('error' in result) && result.success) setOtEntries(prev => prev.filter((e: any) => e.id !== id))
     return result
-  }
+  }, [])
 
   // Bonus actions
-  async function handleAddBonusEntry(data: any) {
+  const handleAddBonusEntry = useCallback(async (data: any) => {
     const result = await salaryActions.addBonusEntry(data)
     if (result && !('error' in result) && result.entry) setBonusEntries(prev => [...prev, result.entry].sort((a: any, b: any) => a.entry_date.localeCompare(b.entry_date)))
     return result
-  }
+  }, [])
 
-  async function handleAddBulkBonusEntries(entries: any[]) {
+  const handleAddBulkBonusEntries = useCallback(async (entries: any[]) => {
     const result = await salaryActions.addBulkBonusEntries(entries)
     if (result && !('error' in result) && result.entries) {
       setBonusEntries(prev => [...prev, ...result.entries].sort((a: any, b: any) => a.entry_date.localeCompare(b.entry_date)))
     }
     return result
-  }
+  }, [])
 
-  async function handleDeleteBonusEntry(id: string) {
+  const handleDeleteBonusEntry = useCallback(async (id: string) => {
     const result = await salaryActions.deleteBonusEntry(id)
     if (result && !('error' in result) && result.success) setBonusEntries(prev => prev.filter((e: any) => e.id !== id))
     return result
-  }
+  }, [])
 
   // Payslip actions
-  async function handleCreatePayslips(m: number, y: number, workingDays?: number) {
+  const handleCreatePayslips = useCallback(async (m: number, y: number, workingDays?: number) => {
     const result = await salaryActions.createMonthlyPayslips(m, y, workingDays)
     if (result && !('error' in result) && result.payslips) setPayslips(result.payslips)
     return result
-  }
+  }, [])
 
-  async function handleSignPayslip(id: string, signatureData?: string) {
+  const handleSignPayslip = useCallback(async (id: string, signatureData?: string) => {
     const result = await salaryActions.signPayslip(id, signatureData)
     if (result && !('error' in result) && result.payslip) setPayslips(prev => prev.map((p: any) => p.id === id ? result.payslip : p))
     return result
-  }
+  }, [])
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: 'workers', label: 'Workers', icon: '👷' },
@@ -186,30 +186,30 @@ export default function SalaryClient({
         ))}
       </div>
 
-      {/* Content */}
+      {/* Content — all tabs stay mounted; CSS hides inactive ones to avoid remount cost */}
       <div style={{ padding: '20px', flex: 1, overflowY: 'auto' }}>
-        {activeTab === 'workers' && (
+        <div style={{ display: activeTab === 'workers' ? undefined : 'none' }}>
           <WorkersTab workers={workers} role={role} onCreateWorker={handleCreateWorker} onUpdateWorker={handleUpdateWorker} onDeleteWorker={handleDeleteWorker} />
-        )}
-        {activeTab === 'ot' && (
+        </div>
+        <div style={{ display: activeTab === 'ot' ? undefined : 'none' }}>
           <OtEntriesTab workers={workers} entries={otEntries} month={month} year={year} userId={userId} onAddEntry={handleAddOtEntry} onAddBulkEntries={handleAddBulkOtEntries} onDeleteEntry={handleDeleteOtEntry} />
-        )}
-        {activeTab === 'bonus' && (
+        </div>
+        <div style={{ display: activeTab === 'bonus' ? undefined : 'none' }}>
           <BonusEntriesTab workers={workers} entries={bonusEntries} month={month} year={year} userId={userId} onAddEntry={handleAddBonusEntry} onAddBulkEntries={handleAddBulkBonusEntries} onDeleteEntry={handleDeleteBonusEntry} />
-        )}
-        {activeTab === 'payslips' && (
-          <PayslipsTab 
-            payslips={payslips} 
+        </div>
+        <div style={{ display: activeTab === 'payslips' ? undefined : 'none' }}>
+          <PayslipsTab
+            payslips={payslips}
             otEntries={otEntries}
             bonusEntries={bonusEntries}
             workers={workers}
-            month={month} 
-            year={year} 
-            role={role} 
-            onCreatePayslips={handleCreatePayslips} 
-            onSignPayslip={handleSignPayslip} 
+            month={month}
+            year={year}
+            role={role}
+            onCreatePayslips={handleCreatePayslips}
+            onSignPayslip={handleSignPayslip}
           />
-        )}
+        </div>
       </div>
     </>
   )
