@@ -168,6 +168,7 @@ const styles = StyleSheet.create({
   },
   spacer: { marginTop: 7 },
   smallSpacer: { marginTop: 4 },
+  blankLine: { height: 6 },
 
   // Totals
   totalsRow: {
@@ -248,15 +249,25 @@ export interface InvoiceData {
   cvAmount?: number;
   paymentCompany?: 'Above All Aircon' | 'Letswork';
   hideSupplyDesc?: boolean;
+  hideMaterialsHeading?: boolean;
 }
 
 interface InvoicePDFProps {
   data: InvoiceData;
 }
 
+/** react-pdf drops whitespace at the start of a line during layout, so convert
+ *  leading spaces/tabs to non-breaking spaces to keep the indentation as typed. */
+const keepIndent = (s: string) => s.replace(/^[ \t]+/, m => String.fromCharCode(0xA0).repeat(m.length));
+
 /** Small helper — one bullet point line */
 const Bullet: React.FC<{ text: string }> = ({ text }) => {
-  const cleanedText = text.replace(/^[•✔✅\-\*\s]+/, '');
+  // A blank line becomes a compact vertical gap (no dot), so spacing is preserved.
+  if (!text.trim()) {
+    return <View style={styles.blankLine} />;
+  }
+  // Strip only a leading bullet glyph (and one adjacent space); keep any indentation.
+  const cleanedText = keepIndent(text.replace(/^[•✔✅\-\*]+ ?/, ''));
   return (
     <View style={styles.bulletLine}>
       <View style={styles.bulletDot} />
@@ -360,7 +371,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                   <Text>1</Text>
                 </View>
                 <View style={[styles.tdDesc, { paddingBottom: 0 }]}>
-                  <Text style={styles.descItem}>{data.laborDesc}</Text>
+                  <Text style={styles.descItem}>{keepIndent(data.laborDesc)}</Text>
                 </View>
                 <View style={styles.tdQty} />
                 <View style={styles.tdAmt} />
@@ -373,7 +384,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                     <Text>2</Text>
                   </View>
                   <View style={[styles.tdDesc, { paddingTop: 7, paddingBottom: 0 }]}>
-                    <Text style={styles.descItem}>{data.supplyDesc}</Text>
+                    <Text style={styles.descItem}>{keepIndent(data.supplyDesc)}</Text>
                   </View>
                   <View style={styles.tdQty} />
                   <View style={styles.tdAmt} />
@@ -386,7 +397,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                   {data.hideSupplyDesc && <Text>2</Text>}
                 </View>
                 <View style={[styles.tdDesc, { paddingTop: data.hideSupplyDesc ? 7 : 4, paddingBottom: 0 }]}>
-                  <Text style={styles.descBold}>{data.brandHeading}</Text>
+                  <Text style={styles.descBold}>{keepIndent(data.brandHeading)}</Text>
                 </View>
                 <View style={styles.tdQty} />
                 <View style={styles.tdAmt} />
@@ -397,7 +408,9 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                 <View style={styles.tdNo} />
                 <View style={[styles.tdDesc, { paddingTop: 4, paddingBottom: 0 }]}>
                   {data.units.map((u, i) => (
-                    <Text key={i} style={styles.descBold}>{u}</Text>
+                    u.trim()
+                      ? <Text key={i} style={styles.descBold}>{keepIndent(u)}</Text>
+                      : <View key={i} style={styles.blankLine} />
                   ))}
                 </View>
                 <View style={[styles.tdQty, { paddingTop: 4, paddingBottom: 0 }]}>
@@ -412,7 +425,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
               <View style={styles.tableRow}>
                 <View style={styles.tdNo} />
                 <View style={[styles.tdDesc, { paddingTop: 2, paddingBottom: 0 }]}>
-                  <Text style={[styles.descBold, { marginTop: 0 }]}>{data.systemLabel}</Text>
+                  <Text style={[styles.descBold, { marginTop: 0 }]}>{keepIndent(data.systemLabel)}</Text>
                 </View>
                 <View style={styles.tdQty} />
                 <View style={styles.tdAmt} />
@@ -422,8 +435,12 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
               <View style={styles.tableRow}>
                 <View style={styles.tdNo} />
                 <View style={[styles.tdDesc, { paddingTop: 7 }]}>
-                  <Text style={styles.descItem}>Installation with Full Upgraded Materials as below:</Text>
-                  <View style={styles.smallSpacer} />
+                  {!data.hideMaterialsHeading && (
+                    <>
+                      <Text style={styles.descItem}>Installation with Full Upgraded Materials as below:</Text>
+                      <View style={styles.smallSpacer} />
+                    </>
+                  )}
                   {data.materials.map((m, i) => (
                     <Bullet key={i} text={m} />
                   ))}

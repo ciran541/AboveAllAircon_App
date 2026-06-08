@@ -25,7 +25,9 @@ interface InvoicePreviewModalProps {
 
 // Helper to join array fields for textarea editing
 const arrToText = (arr: string[]) => arr.join('\n');
-const textToArr = (text: string) => text.split('\n').map(s => s.trim()).filter(Boolean);
+// Space-sensitive: preserve every line exactly as typed — leading/indent spaces AND
+// blank lines (rendered as a one-line vertical gap by the PDF).
+const textToArr = (text: string) => text.split('\n');
 
 export default function InvoicePreviewModal({ job, onClose, documentType = 'invoice', onUpdateJob }: InvoicePreviewModalProps) {
   const [mounted, setMounted] = useState(false);
@@ -91,6 +93,7 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
     cvAmount: Number(job?.cv_amount || 300),
     paymentCompany: 'Above All Aircon',
     hideSupplyDesc: true, // Default to true as requested
+    hideMaterialsHeading: false,
   });
 
   // ── Textarea mirror state (arrays → editable text) ───────────────────────
@@ -363,6 +366,20 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
 
               {divider}
               <h3 style={sectionHeadStyle}>Materials &amp; Warranty</h3>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  id="hideMaterialsHeading"
+                  name="hideMaterialsHeading"
+                  checked={data.hideMaterialsHeading}
+                  onChange={handleChange}
+                  style={{ width: 16, height: 16, cursor: 'pointer' }}
+                />
+                <label htmlFor="hideMaterialsHeading" style={{ ...labelStyle, marginBottom: 0, cursor: 'pointer' }}>
+                  Hide &ldquo;Installation with Full Upgraded Materials as below:&rdquo; line
+                </label>
+              </div>
 
               <div>
                 <label style={labelStyle}>Materials <span style={{ fontWeight: 400, color: '#94a3b8' }}>(one per line → bullet points)</span></label>
