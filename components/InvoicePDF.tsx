@@ -207,6 +207,27 @@ const styles = StyleSheet.create({
   balanceBg: {
     backgroundColor: '#00ff00',
   },
+  balancePaidBg: {
+    backgroundColor: '#dcfce7',
+  },
+  balancePaidText: {
+    color: '#15803d',
+    fontFamily: 'Times-Bold',
+  },
+
+  /* ── PAID stamp watermark ── */
+  paidStamp: {
+    position: 'absolute',
+    top: '38%',
+    left: '18%',
+    width: '64%',
+    textAlign: 'center',
+    fontFamily: 'Times-Bold',
+    fontSize: 88,
+    color: '#16a34a',
+    opacity: 0.13,
+    transform: 'rotate(-30deg)',
+  },
 
   /* ── Footer ── */
   footer: {
@@ -250,6 +271,8 @@ export interface InvoiceData {
   paymentCompany?: 'Above All Aircon' | 'Letswork';
   hideSupplyDesc?: boolean;
   hideMaterialsHeading?: boolean;
+  fullyPaid?: boolean;       // When true: shows PAID stamp + zero balance
+  finalPaymentCollected?: number; // Amount collected as final balance payment
 }
 
 interface InvoicePDFProps {
@@ -284,9 +307,17 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
     ? formattedDeposit 
     : (data.depositCollected > 0 ? `${formattedDeposit}\nCollected` : formattedDeposit);
 
+  // For fully-paid receipts, balance displayed is always $0
+  const displayBalance = data.fullyPaid ? 0 : data.balance;
+
   return (
     <Document>
       <Page size="A4" style={styles.page} wrap={false}>
+
+        {/* ── PAID WATERMARK (only on fully-paid receipts) ── */}
+        {data.fullyPaid && (
+          <Text style={styles.paidStamp}>PAID</Text>
+        )}
 
         {/* ── HEADER ── */}
         <View style={styles.headerRow}>
@@ -477,12 +508,27 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                 <Text style={styles.totalLabelCell}>{data.isQuotation ? 'Deposit' : 'Deposit'}</Text>
                 <Text style={styles.totalValueCell}>{depositLabel}</Text>
               </View>
-              <View style={styles.totalLine}>
-                <Text style={[styles.totalLabelCell, styles.balanceBg]}>Balance</Text>
-                <Text style={[styles.totalValueCell, styles.balanceBg]}>
-                  S${data.balance.toFixed(0)}
-                </Text>
-              </View>
+              {data.fullyPaid && (data.finalPaymentCollected || 0) > 0 && (
+                <View style={styles.totalLine}>
+                  <Text style={styles.totalLabelCell}>Final Payment{`\n`}Collected</Text>
+                  <Text style={styles.totalValueCell}>S${(data.finalPaymentCollected || 0).toFixed(0)}{`\n`}Collected</Text>
+                </View>
+              )}
+              {data.fullyPaid ? (
+                <View style={styles.totalLine}>
+                  <Text style={[styles.totalLabelCell, styles.balancePaidBg, styles.balancePaidText]}>Balance</Text>
+                  <Text style={[styles.totalValueCell, styles.balancePaidBg, styles.balancePaidText]}>
+                    S$0{`\n`}FULLY PAID
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.totalLine}>
+                  <Text style={[styles.totalLabelCell, styles.balanceBg]}>Balance</Text>
+                  <Text style={[styles.totalValueCell, styles.balanceBg]}>
+                    S${displayBalance.toFixed(0)}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -494,14 +540,20 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
               CV redeemed (SG Climate Voucher)
             </Text>
           )}
-          {!data.isQuotation && (
+          {data.fullyPaid ? (
+            <Text style={[styles.footerBold, { marginBottom: 12, color: '#15803d' }]}>
+              ✓ Payment fully received. Thank you!
+            </Text>
+          ) : !data.isQuotation ? (
             <Text style={[styles.footerBold, { marginBottom: 12 }]}>
               Job will take place and be completed on {data.jobDateStr}
             </Text>
+          ) : null}
+          {!data.fullyPaid && (
+            <Text style={styles.footerBold}>
+              Please make a paynow transfer to our company UEN
+            </Text>
           )}
-          <Text style={styles.footerBold}>
-            Please make a paynow transfer to our company UEN
-          </Text>
           {data.paymentCompany === 'Letswork' ? (
             <Text style={styles.footerBold}>UEN: 202213844N (Letswork Pte Ltd)</Text>
           ) : (

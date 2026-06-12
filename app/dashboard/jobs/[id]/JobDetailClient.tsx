@@ -35,7 +35,7 @@ export default function JobDetailClient({
   const [showConfirmJobModal, setShowConfirmJobModal] = useState(false);
   const [showWhatsAppTemplate, setShowWhatsAppTemplate] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
-  const [documentMode, setDocumentMode] = useState<"invoice" | "quotation">("invoice");
+  const [documentMode, setDocumentMode] = useState<'invoice' | 'quotation' | 'receipt'>('invoice');
   const [showSecondVisitModal, setShowSecondVisitModal] = useState(false);
   const [showCompleteJobModal, setShowCompleteJobModal] = useState(false);
   const [targetStage, setTargetStage] = useState<string>("");
@@ -295,6 +295,14 @@ export default function JobDetailClient({
                 >
                   📄 Preview & Download Invoice
                 </button>
+                {(normalizedStage === "Completed" || job.payment_status === "Paid") && (
+                  <button
+                    onClick={() => { setDocumentMode("receipt"); setShowInvoiceModal(true); }}
+                    style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #6366f1, #4f46e5)", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)" }}
+                  >
+                    ✅ Receipt (Fully Paid)
+                  </button>
+                )}
               </>
             )}
             <button onClick={() => setIsEditing(!isEditing)} style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", fontSize: 14, fontWeight: 600, color: "#475569", cursor: "pointer" }}>

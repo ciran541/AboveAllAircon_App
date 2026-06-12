@@ -19,7 +19,7 @@ const PDFDownloadLink = dynamic(
 interface InvoicePreviewModalProps {
   job: any;
   onClose: () => void;
-  documentType?: 'invoice' | 'quotation';
+  documentType?: 'invoice' | 'quotation' | 'receipt';
   onUpdateJob?: (updates: any) => void;
 }
 
@@ -34,9 +34,15 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
   const router = useRouter();
 
   const isQuotation = documentType === 'quotation';
+  const isReceipt = documentType === 'receipt';
   const defaultQuoted = Number(job?.quoted_amount || 0);
   const existingDeposit = Number(job?.deposit_collected || 0);
+  const existingFinalPayment = Number(job?.final_payment_collected || 0);
   const defaultDeposit = (isQuotation && existingDeposit === 0) ? defaultQuoted * 0.4 : existingDeposit;
+  // For receipt: balance = 0 (fully paid). For invoice: compute remaining.
+  const defaultBalance = isReceipt
+    ? 0
+    : defaultQuoted - defaultDeposit - (job?.cv_redeemed ? Number(job?.cv_amount || 0) : 0);
 
   // ── Structured PDF data ──────────────────────────────────────────────────
   const [data, setData] = useState<InvoiceData>({
@@ -87,13 +93,15 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
 
     quotedAmount: defaultQuoted,
     depositCollected: defaultDeposit,
-    balance: defaultQuoted - defaultDeposit,
+    balance: defaultBalance,
     jobDateStr: job?.job_date ? new Date(job.job_date).toLocaleDateString('en-GB') : 'TBD',
     isQuotation,
     cvAmount: Number(job?.cv_amount || 300),
     paymentCompany: 'Above All Aircon',
     hideSupplyDesc: true, // Default to true as requested
     hideMaterialsHeading: false,
+    fullyPaid: isReceipt,
+    finalPaymentCollected: existingFinalPayment,
   });
 
   // ── Textarea mirror state (arrays → editable text) ───────────────────────
@@ -224,14 +232,14 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
           background: '#f8fafc',
         }}>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#0f172a' }}>
-            📄 Preview &amp; Edit {isQuotation ? 'Quotation' : 'Invoice'}
+            📄 Preview & Edit {isReceipt ? 'Receipt (Fully Paid)' : isQuotation ? 'Quotation' : 'Invoice'}
           </h2>
           <div style={{ display: 'flex', gap: 12 }}>
             <button onClick={handleClose} style={{
               padding: '8px 16px', borderRadius: 8, border: '1px solid #cbd5e1',
               background: '#fff', fontWeight: 600, cursor: 'pointer', color: '#475569',
             }}>Close</button>
-            <PDFDownloadLink document={<InvoicePDF data={data} />} fileName={`${isQuotation ? 'Quotation' : 'Invoice'}_${data.invoiceNo}.pdf`}>
+            <PDFDownloadLink document={<InvoicePDF data={data} />} fileName={`${isReceipt ? 'Receipt' : isQuotation ? 'Quotation' : 'Invoice'}_${data.invoiceNo}.pdf`}>
               {({ loading }) => (
                 <button disabled={loading} style={{
                   padding: '8px 16px', borderRadius: 8, border: 'none',
