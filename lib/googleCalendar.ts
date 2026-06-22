@@ -139,7 +139,7 @@ function buildEventPayload(params: UpsertParams): CalendarEventPayload {
   const jobNotes = params.job.notes?.trim() || "No notes";
 
   return {
-    summary: `${config.prefix} ${customerAddress} - ${customerPhone}`,
+    summary: `${config.prefix} ${customerAddress} | ${customerPhone}`,
     description: [
       `Customer: ${customerName}`,
       `Phone: ${customerPhone}`,
