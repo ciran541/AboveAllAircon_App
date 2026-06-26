@@ -43,6 +43,21 @@ const EVENT_CONFIG: Record<CalendarEventType, { prefix: string; colorId: string 
   second_visit: { prefix: "[2nd Trip]", colorId: "8" },   // grey (graphite)
 };
 
+// ── Retry helper ──────────────────────────────────────────────────────────────
+
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs = 1000): Promise<T> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const isPermanent = /\b(401|403)\b/.test(err?.message ?? "");
+      if (isPermanent || attempt === maxAttempts) throw err;
+      await new Promise(r => setTimeout(r, baseDelayMs * attempt));
+    }
+  }
+  throw new Error("unreachable");
+}
+
 // ── JWT / Auth ────────────────────────────────────────────────────────────────
 
 function getRequiredEnv(name: string): string {
@@ -95,21 +110,23 @@ async function getAccessToken(): Promise<string> {
     assertion,
   });
 
-  const tokenResponse = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-    cache: "no-store",
+  return withRetry(async () => {
+    const tokenResponse = await fetch(TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+      cache: "no-store",
+    });
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      throw new Error(`Failed to get Google access token: ${tokenResponse.status} ${errorText}`);
+    }
+
+    const tokenData = (await tokenResponse.json()) as { access_token?: string };
+    if (!tokenData.access_token) throw new Error("Google token response did not include access_token.");
+    return tokenData.access_token;
   });
-
-  if (!tokenResponse.ok) {
-    const errorText = await tokenResponse.text();
-    throw new Error(`Failed to get Google access token: ${tokenResponse.status} ${errorText}`);
-  }
-
-  const tokenData = (await tokenResponse.json()) as { access_token?: string };
-  if (!tokenData.access_token) throw new Error("Google token response did not include access_token.");
-  return tokenData.access_token;
 }
 
 // ── Event building ────────────────────────────────────────────────────────────
@@ -187,24 +204,26 @@ async function _upsertWithToken(
     ? `/calendars/${calendarId}/events/${encodeURIComponent(params.existingEventId)}`
     : `/calendars/${calendarId}/events`;
 
-  const response = await fetch(`${CALENDAR_API_BASE}${eventPath}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-    cache: "no-store",
+  return withRetry(async () => {
+    const response = await fetch(`${CALENDAR_API_BASE}${eventPath}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Google Calendar upsert failed (${params.type}): ${response.status} ${errorText}`);
+    }
+
+    const data = (await response.json()) as { id?: string };
+    if (!data.id) throw new Error("Google Calendar response did not include event id.");
+    return { eventId: data.id };
   });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Google Calendar upsert failed (${params.type}): ${response.status} ${errorText}`);
-  }
-
-  const data = (await response.json()) as { id?: string };
-  if (!data.id) throw new Error("Google Calendar response did not include event id.");
-  return { eventId: data.id };
 }
 
 async function _deleteWithToken(
@@ -212,19 +231,21 @@ async function _deleteWithToken(
   calendarId: string,
   eventId: string
 ): Promise<void> {
-  const response = await fetch(
-    `${CALENDAR_API_BASE}/calendars/${calendarId}/events/${encodeURIComponent(eventId)}`,
-    {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
+  await withRetry(async () => {
+    const response = await fetch(
+      `${CALENDAR_API_BASE}/calendars/${calendarId}/events/${encodeURIComponent(eventId)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      }
+    );
+    // 404 means it's already gone — that's fine
+    if (!response.ok && response.status !== 404) {
+      const errorText = await response.text();
+      throw new Error(`Google Calendar delete failed: ${response.status} ${errorText}`);
     }
-  );
-  // 404 means it's already gone — that's fine
-  if (!response.ok && response.status !== 404) {
-    const errorText = await response.text();
-    throw new Error(`Google Calendar delete failed: ${response.status} ${errorText}`);
-  }
+  });
 }
 
 // ── Batch API (single token, parallel operations) ─────────────────────────────
