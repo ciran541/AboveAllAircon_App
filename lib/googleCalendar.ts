@@ -40,7 +40,7 @@ const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 const EVENT_CONFIG: Record<CalendarEventType, { prefix: string; colorId: string }> = {
   site_visit: { prefix: "[Site Visit]", colorId: "3" },   // purple (grape)
   job: { prefix: "[Job]", colorId: "8" },   // grey (graphite)
-  second_visit: { prefix: "[2nd Trip]", colorId: "8" },   // grey (graphite)
+  second_visit: { prefix: "[2nd Visit]", colorId: "8" },   // grey (graphite)
 };
 
 // ── Retry helper ──────────────────────────────────────────────────────────────
