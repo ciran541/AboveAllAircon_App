@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { batchSyncCalendarEvents, deleteCalendarEvent } from "@/lib/googleCalendar";
 import { getStageDB } from "@/lib/constants";
-import { logJobToSheets } from "@/lib/sheetsBackup";
+import { logJobToSheets, logMetaLeadToSheets } from "@/lib/sheetsBackup";
 
 /** Invalidates all cached job data for a specific user + the admin dashboard. */
 function invalidateJobCaches(userId?: string) {
@@ -151,6 +151,7 @@ export async function transitionStage(
 
   // Google Sheets backup — void return, handles its own errors internally
   logJobToSheets(updatedJob);
+  logMetaLeadToSheets(updatedJob);
 
   invalidateJobCaches();
   return { success: true, calendarError: calendarError ?? null };
@@ -186,6 +187,7 @@ export async function updateFields(
 
   // Google Sheets backup — void return, handles its own errors internally
   logJobToSheets(data);
+  logMetaLeadToSheets(data);
 
   invalidateJobCaches();
   return { success: true, data, calendarError: calendarError ?? null };
@@ -296,6 +298,7 @@ export async function saveJob(
 
     // Google Sheets backup — void return, handles its own errors internally
     logJobToSheets(fullJob);
+    logMetaLeadToSheets(fullJob);
 
     invalidateJobCaches();
     return { success: true, savedJob: fullJob, calendarError: calendarError ?? null };

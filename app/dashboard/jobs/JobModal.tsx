@@ -5,7 +5,7 @@ import TimePicker from "@/components/TimePicker";
 import { Job, STAGES } from "./JobsClient";
 import { saveJob } from "@/app/actions/jobActions";
 import { createClient } from "@/lib/supabase/client";
-import { JOB_STAGES, UNIT_TYPES } from "@/lib/constants";
+import { JOB_STAGES, UNIT_TYPES, LEAD_SOURCES } from "@/lib/constants";
 
 type Customer = { id: string; name: string; phone: string | null; address: string | null; unit_type?: string | null; };
 
@@ -40,7 +40,7 @@ export default function JobModal({
       assigned_to: "",
       quoted_amount: 0,
       priority: "Medium",
-      source: "Other",
+      source: "Meta",
       status: "open",
       visit_time: "",
     }
@@ -262,6 +262,12 @@ export default function JobModal({
                 <div className="form-group">
                   <label className="form-label">Number of Units</label>
                   <input type="number" className="form-input" min={1} value={formData.unit_count || 1} onChange={(e) => setFormData({ ...formData, unit_count: parseInt(e.target.value) || 1 })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Lead Source</label>
+                  <select className="form-input" value={formData.source || "Meta"} onChange={(e) => setFormData({ ...formData, source: e.target.value })}>
+                    {LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
                 {/* Priority, Assignment, and Financials are currently hidden per request */}
                 {/* 

@@ -9,8 +9,20 @@
  * - Has zero impact on response time or DB operations.
  */
 
+import { JOB_STAGES, getStageDisplay } from "@/lib/constants";
+
 const SHEETS_WEBHOOK_URL    = process.env.GOOGLE_SHEETS_BACKUP_URL    ?? "";
 const SHEETS_BACKUP_SECRET  = process.env.GOOGLE_SHEETS_BACKUP_SECRET ?? "";
+
+const META_LEADS_WEBHOOK_URL  = process.env.GOOGLE_SHEETS_META_LEADS_URL    ?? "";
+const META_LEADS_SECRET       = process.env.GOOGLE_SHEETS_META_LEADS_SECRET ?? "";
+
+// Keep in sync with app/dashboard/analytics/MetaLeadsReport.tsx
+// Qualified: lead reached "Site Visit Scheduled" — the first pipeline stage,
+// so this covers every lead keyed into the CRM.
+const QUALIFIED_FROM = "Site Visit Scheduled";
+// Confirmed: lead reached "Job Scheduled" — quote accepted, job booked.
+const CONFIRMED_FROM = "Job Scheduled";
 
 /** Maps a raw job DB row (with joined customers) into a flat, ops-friendly payload. */
 function buildPayload(job: any): Record<string, string> {
@@ -82,5 +94,48 @@ export function logJobToSheets(job: any): void {
     })
     .catch((err) => {
       console.warn("[SheetsBackup] Failed to log job:", err?.message ?? err);
+    });
+}
+
+/**
+ * Call this AFTER a successful DB write, alongside logJobToSheets.
+ * Pushes only Meta-sourced leads to a separate sheet the ad agency can
+ * access, so they can see lead volume / qualification / conversion and
+ * optimize their campaigns. No-op for jobs from any other source.
+ *
+ * Usage: logMetaLeadToSheets(savedJob)   ← no await, no try/catch needed by caller
+ */
+export function logMetaLeadToSheets(job: any): void {
+  if (!META_LEADS_WEBHOOK_URL || job?.source !== "Meta") return;
+
+  const customer = Array.isArray(job.customers) ? job.customers[0] : job.customers;
+
+  const stageIdx = JOB_STAGES.indexOf(getStageDisplay(job.stage ?? "") as any);
+
+  const payload = {
+    job_id: job.id ?? "",
+    customer_name: customer?.name ?? "",
+    contact: customer?.phone ?? "",
+    stage: job.stage ?? "",
+    qualified: stageIdx >= JOB_STAGES.indexOf(QUALIFIED_FROM) ? "Yes" : "No",
+    confirmed: stageIdx >= JOB_STAGES.indexOf(CONFIRMED_FROM) ? "Yes" : "No",
+    created_at: job.created_at ?? "",
+    last_synced: new Date().toISOString(),
+  };
+
+  // Fire and forget — intentionally not awaited
+  fetch(META_LEADS_WEBHOOK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ secret: META_LEADS_SECRET, ...payload }),
+  })
+    .then(async (res) => {
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.warn("[SheetsBackup] Meta lead — non-OK response:", res.status, text);
+      }
+    })
+    .catch((err) => {
+      console.warn("[SheetsBackup] Failed to log Meta lead:", err?.message ?? err);
     });
 }

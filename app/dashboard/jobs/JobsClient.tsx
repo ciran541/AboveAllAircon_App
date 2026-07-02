@@ -7,7 +7,7 @@ import JobModal from "./JobModal";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal, CompleteJobModal } from "@/components/StageModals";
 import { updateJobStage, deleteJob } from "@/app/actions/jobActions";
-import { JOB_STAGES, getStageDisplay, getStageDB } from "@/lib/constants";
+import { JOB_STAGES, getStageDisplay, getStageDB, LEAD_SOURCES } from "@/lib/constants";
 
 export type Job = {
   id: string;
@@ -78,7 +78,7 @@ export default function JobsClient({
   userId: string;
   role: "admin" | "staff";
   staffProfiles: { id: string; role: string; full_name?: string; email?: string }[];
-  initialFilters: { q: string; service: string; stage: string; view: string; dateFrom: string; dateTo: string };
+  initialFilters: { q: string; service: string; stage: string; source: string; view: string; dateFrom: string; dateTo: string };
   nextCursor: { created_at: string; id: string } | null;
 }) {
   const router = useRouter();
@@ -97,6 +97,7 @@ export default function JobsClient({
   const [searchTermRaw, setSearchTermRaw] = useState(initialFilters.q);
   const [serviceTypeFilter, setServiceTypeFilter] = useState(initialFilters.service);
   const [stageFilter, setStageFilter] = useState(initialFilters.stage);
+  const [sourceFilter, setSourceFilter] = useState(initialFilters.source);
   const [viewMode, setViewMode] = useState<"board" | "list">(initialFilters.view === "list" ? "list" : "board");
   const [dateFrom, setDateFrom] = useState(initialFilters.dateFrom);
   const [dateTo, setDateTo] = useState(initialFilters.dateTo);
@@ -124,18 +125,19 @@ export default function JobsClient({
       q:          searchTermRaw,
       service:    serviceTypeFilter,
       stage:      stageFilter,
+      source:     sourceFilter,
       view:       viewMode,
       date_from:  dateFrom,
       date_to:    dateTo,
       ...overrides,
     });
     // Strip defaults to keep URLs clean
-    ["q", "service", "stage"].forEach(k => { if (sp.get(k) === "All" || sp.get(k) === "") sp.delete(k); });
+    ["q", "service", "stage", "source"].forEach(k => { if (sp.get(k) === "All" || sp.get(k) === "") sp.delete(k); });
     if (sp.get("view") === "board") sp.delete("view");
     if (!sp.get("date_from")) sp.delete("date_from");
     if (!sp.get("date_to")) sp.delete("date_to");
     router.push(`${pathname}?${sp.toString()}`);
-  }, [searchTermRaw, serviceTypeFilter, stageFilter, viewMode, dateFrom, dateTo, pathname, router]);
+  }, [searchTermRaw, serviceTypeFilter, stageFilter, sourceFilter, viewMode, dateFrom, dateTo, pathname, router]);
 
   // Debounced search — waits 300ms after typing stops before pushing to URL
   const setSearchTerm = useCallback((val: string) => {
@@ -311,7 +313,7 @@ export default function JobsClient({
     setJobToDelete(null);
   };
 
-  const hasActiveFilters = !!(searchTerm || serviceTypeFilter !== "All" || stageFilter !== "All" || dateFrom || dateTo);
+  const hasActiveFilters = !!(searchTerm || serviceTypeFilter !== "All" || stageFilter !== "All" || sourceFilter !== "All" || dateFrom || dateTo);
 
   return (
     <div className="page-fade-in" style={isFullscreen ? {
@@ -464,6 +466,17 @@ export default function JobsClient({
             ))}
           </select>
 
+          <select
+            value={sourceFilter}
+            onChange={(e) => { setSourceFilter(e.target.value); pushFilters({ source: e.target.value }); }}
+            className="pipeline-filter-select"
+          >
+            <option value="All">All Sources</option>
+            {LEAD_SOURCES.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+
           {/* Date Range Toggle */}
           <button
             onClick={() => setShowDateFilter(!showDateFilter)}
@@ -487,7 +500,7 @@ export default function JobsClient({
 
           {hasActiveFilters && (
             <button
-              onClick={() => { setSearchTermRaw(""); setServiceTypeFilter("All"); setStageFilter("All"); setDateFrom(""); setDateTo(""); setShowDateFilter(false); pushFilters({ q: "", service: "All", stage: "All", date_from: "", date_to: "" }); }}
+              onClick={() => { setSearchTermRaw(""); setServiceTypeFilter("All"); setStageFilter("All"); setSourceFilter("All"); setDateFrom(""); setDateTo(""); setShowDateFilter(false); pushFilters({ q: "", service: "All", stage: "All", source: "All", date_from: "", date_to: "" }); }}
               style={{ background: "none", border: "none", color: "#3b82f6", fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: "0 4px", height: 38 }}
             >
               Clear filters
@@ -570,6 +583,7 @@ export default function JobsClient({
                     const sp = new URLSearchParams({
                       q: searchTerm, service: serviceTypeFilter,
                       stage: stageFilter,
+                      source: sourceFilter,
                       view: "list",
                       cursor_created_at: nextCursor.created_at,
                       cursor_id: nextCursor.id,

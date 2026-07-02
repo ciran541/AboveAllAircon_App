@@ -20,6 +20,7 @@ export default async function AnalyticsPage() {
     { data: olderOpenJobs },
     { data: payslips },
     { data: pendingPaymentJobs },
+    { data: metaLeads },
   ] = await Promise.all([
     // Jobs created in the last 13 months
     supabase
@@ -51,6 +52,16 @@ export default async function AnalyticsPage() {
       .eq('payment_status', 'Pending')
       .order('created_at', { ascending: true })
       .limit(15),
+
+    // All Meta-sourced leads, for the agency reporting/export section —
+    // not time-windowed like the KPIs above, since the agency may ask for
+    // any past month.
+    supabase
+      .from('jobs')
+      .select('id, created_at, stage, source, customers(name, phone)')
+      .eq('source', 'Meta')
+      .order('created_at', { ascending: false })
+      .limit(2000),
   ])
 
   // Merge recent + older open jobs, deduplicating by id
@@ -63,6 +74,7 @@ export default async function AnalyticsPage() {
       jobs={Array.from(jobMap.values())}
       payslips={payslips ?? []}
       pendingPaymentJobs={pendingPaymentJobs ?? []}
+      metaLeads={metaLeads ?? []}
     />
   )
 }

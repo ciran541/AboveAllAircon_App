@@ -37,6 +37,7 @@ export default async function JobsPage({
     q?: string;
     service?: string;
     stage?: string;
+    source?: string;
     view?: string;
     date_from?: string;
     date_to?: string;
@@ -49,6 +50,7 @@ export default async function JobsPage({
   const q         = params.q?.trim() || "";
   const service   = params.service || "All";
   const stage     = params.stage   || "All";
+  const source    = params.source  || "All";
   const view      = params.view    || "board";
   const dateFrom  = params.date_from || "";
   const dateTo    = params.date_to   || "";
@@ -67,11 +69,13 @@ export default async function JobsPage({
   // ── Builds a Supabase query with all filters applied.
   function applyFilters(query: any) {
     if (service !== "All") query = query.eq("service_type", service);
-    
+
     if (stage !== "All") {
       const dbStage = getStageDB(stage);
       query = query.eq("stage", dbStage);
     }
+
+    if (source !== "All") query = query.eq("source", source);
 
     // Text search: Job fields OR Matching Customer IDs
     if (q) {
@@ -199,7 +203,7 @@ export default async function JobsPage({
       userId={userId}
       role={"admin"}
       staffProfiles={staffProfiles}
-      initialFilters={{ q, service, stage, view, dateFrom, dateTo }}
+      initialFilters={{ q, service, stage, source, view, dateFrom, dateTo }}
       nextCursor={nextCursor}
     />
   );

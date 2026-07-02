@@ -64,3 +64,17 @@ export type UnitType = (typeof UNIT_TYPES)[number];
 export const PAYMENT_STATUSES = ["Pending", "Paid"] as const;
 
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+// ── Lead Source ───────────────────────────────────────────────────────────────
+
+/** How a lead first reached us. "Meta" covers Facebook/Instagram ad leads. */
+export const LEAD_SOURCES = [
+  "WhatsApp",
+  "Call",
+  "Referral",
+  "Website",
+  "Meta",
+  "Other",
+] as const;
+
+export type LeadSource = (typeof LEAD_SOURCES)[number];

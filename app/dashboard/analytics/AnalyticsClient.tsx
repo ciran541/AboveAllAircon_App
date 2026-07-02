@@ -5,6 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, Legend,
 } from 'recharts'
+import MetaLeadsReport from './MetaLeadsReport'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,10 +45,18 @@ interface PendingJob {
   customers: { name: string } | { name: string }[] | null
 }
 
+interface MetaLead {
+  id: string
+  created_at: string
+  stage: string
+  customers: { name: string; phone: string | null } | { name: string; phone: string | null }[] | null
+}
+
 interface Props {
   jobs: Job[]
   payslips: Payslip[]
   pendingPaymentJobs: PendingJob[]
+  metaLeads: MetaLead[]
 }
 
 type Period = 'month' | '3months' | '6months' | 'year'
@@ -169,7 +178,7 @@ function ChartCard({ title, children, height = 240 }: { title: string; children:
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function AnalyticsClient({ jobs, payslips, pendingPaymentJobs }: Props) {
+export default function AnalyticsClient({ jobs, payslips, pendingPaymentJobs, metaLeads }: Props) {
   const [period, setPeriod] = useState<Period>('month')
 
   // ── Filtered jobs by period ─────────────────────────────────────────────────
@@ -464,6 +473,11 @@ export default function AnalyticsClient({ jobs, payslips, pendingPaymentJobs }: 
               </div>
             )}
           </div>
+        </div>
+
+        {/* Row 6: Meta Lead Report */}
+        <div style={{ marginTop: 16 }}>
+          <MetaLeadsReport leads={metaLeads} />
         </div>
 
       </div>
