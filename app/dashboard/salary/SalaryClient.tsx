@@ -120,8 +120,8 @@ export default function SalaryClient({
   }, [])
 
   // Payslip actions
-  const handleCreatePayslips = useCallback(async (m: number, y: number, workingDays?: number) => {
-    const result = await salaryActions.createMonthlyPayslips(m, y, workingDays)
+  const handleCreatePayslips = useCallback(async (m: number, y: number, workingDaysByWorker?: Record<string, number>) => {
+    const result = await salaryActions.createMonthlyPayslips(m, y, workingDaysByWorker)
     if (result && !('error' in result) && result.payslips) setPayslips(result.payslips)
     return result
   }, [])

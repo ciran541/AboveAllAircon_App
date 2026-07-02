@@ -1,7 +1,9 @@
 'use client'
 
 import { useMemo } from 'react'
-import { JOB_STAGES, getStageDisplay } from '@/lib/constants'
+import { JOB_STAGES, getStageDisplay, getSourceDisplay } from '@/lib/constants'
+
+const SOURCE_LABEL = getSourceDisplay('Meta')
 
 interface MetaLead {
   id: string
@@ -56,6 +58,8 @@ function csvEscape(val: string) {
   return val
 }
 
+const FILENAME_SLUG = SOURCE_LABEL.toLowerCase()
+
 function downloadCsv(filename: string, leads: MetaLead[]) {
   const header = ['Name', 'Phone', 'Created Date', 'Stage', 'Qualified (Site Visit Scheduled+)', 'Confirmed (Job Scheduled+)']
   const rows = leads.map(l => {
@@ -103,12 +107,12 @@ export default function MetaLeadsReport({ leads }: { leads: MetaLead[] }) {
     <div style={{ background: '#fff', border: '1px solid #e4e9f0', borderRadius: 12, padding: '18px 20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <p style={{ fontSize: 13.5, fontWeight: 700, color: '#111827' }}>Meta Lead Report</p>
+          <p style={{ fontSize: 13.5, fontWeight: 700, color: '#111827' }}>{SOURCE_LABEL} Lead Report</p>
           <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>For sharing with the ad agency — by month</p>
         </div>
         {leads.length > 0 && (
           <button
-            onClick={() => downloadCsv('meta-leads-all.csv', leads)}
+            onClick={() => downloadCsv(`${FILENAME_SLUG}-leads-all.csv`, leads)}
             style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', fontSize: 12.5, fontWeight: 600, color: '#374151', cursor: 'pointer' }}
           >
             Export All CSV
@@ -118,7 +122,7 @@ export default function MetaLeadsReport({ leads }: { leads: MetaLead[] }) {
 
       {monthRows.length === 0 ? (
         <div style={{ padding: '24px 0', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-          No Meta-sourced leads yet. Tag a lead's source as "Meta" to see it here.
+          No {SOURCE_LABEL}-sourced leads yet. Tag a lead's source as "{SOURCE_LABEL}" to see it here.
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
@@ -142,7 +146,7 @@ export default function MetaLeadsReport({ leads }: { leads: MetaLead[] }) {
                     <td style={{ padding: '10px', textAlign: 'center', fontWeight: 700, color: rate >= 20 ? '#10b981' : '#f59e0b' }}>{rate}%</td>
                     <td style={{ padding: '10px', textAlign: 'center' }}>
                       <button
-                        onClick={() => downloadCsv(`meta-leads-${row.key}.csv`, row.leads)}
+                        onClick={() => downloadCsv(`${FILENAME_SLUG}-leads-${row.key}.csv`, row.leads)}
                         style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer' }}
                       >
                         CSV

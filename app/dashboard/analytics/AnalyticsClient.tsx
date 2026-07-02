@@ -475,7 +475,7 @@ export default function AnalyticsClient({ jobs, payslips, pendingPaymentJobs, me
           </div>
         </div>
 
-        {/* Row 6: Meta Lead Report */}
+        {/* Row 6: YME (Meta) Lead Report */}
         <div style={{ marginTop: 16 }}>
           <MetaLeadsReport leads={metaLeads} />
         </div>

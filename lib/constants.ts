@@ -67,14 +67,31 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 // ── Lead Source ───────────────────────────────────────────────────────────────
 
-/** How a lead first reached us. "Meta" covers Facebook/Instagram ad leads. */
+/**
+ * How a lead first reached us. "Meta" covers Facebook/Instagram ad leads.
+ * "ID" covers leads referred by interior designers.
+ * The DB stores "Meta" for what the UI shows as "YME".
+ */
 export const LEAD_SOURCES = [
   "WhatsApp",
   "Call",
   "Referral",
   "Website",
   "Meta",
+  "ID",
   "Other",
 ] as const;
 
 export type LeadSource = (typeof LEAD_SOURCES)[number];
+
+/**
+ * Maps DB-stored source values → UI display labels.
+ * Only include entries where the DB value differs from the UI label.
+ */
+export const SOURCE_DISPLAY: Record<string, string> = {
+  Meta: "YME",
+};
+
+/** Converts a raw DB source value to the UI display label. */
+export const getSourceDisplay = (source: string): string =>
+  SOURCE_DISPLAY[source] ?? source;

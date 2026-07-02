@@ -24,9 +24,11 @@ interface PayslipsTabProps {
   workers: any[]
   month: number; year: number
   role: 'admin' | 'staff'
-  onCreatePayslips: (month: number, year: number, workingDays?: number) => Promise<any>
+  onCreatePayslips: (month: number, year: number, workingDaysByWorker?: Record<string, number>) => Promise<any>
   onSignPayslip: (id: string, signatureData?: string) => Promise<any>
 }
+
+const DEFAULT_WORKING_DAYS = 26
 
 const MONTH_NAMES = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
@@ -48,7 +50,8 @@ function IconRefresh() {
 
 const PayslipsTab = memo(function PayslipsTab({ payslips, otEntries, bonusEntries, workers, month, year, role, onCreatePayslips, onSignPayslip }: PayslipsTabProps) {
   const [creating, setCreating] = useState(false)
-  const [workingDays, setWorkingDays] = useState(26)
+  const [workingDaysOverrides, setWorkingDaysOverrides] = useState<Record<string, number>>({})
+  const [showWorkingDaysPanel, setShowWorkingDaysPanel] = useState(false)
   const [signingId, setSigningId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [signatureTarget, setSignatureTarget] = useState<{ id: string; name: string } | null>(null)
@@ -63,6 +66,19 @@ const PayslipsTab = memo(function PayslipsTab({ payslips, otEntries, bonusEntrie
 
   const isAdmin = role === 'admin'
   const hasPayslips = payslips.length > 0
+
+  const activeWorkers = useMemo(() => workers.filter(w => w.is_active), [workers])
+
+  const workingDaysMap = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const w of activeWorkers) map[w.id] = workingDaysOverrides[w.id] ?? DEFAULT_WORKING_DAYS
+    return map
+  }, [activeWorkers, workingDaysOverrides])
+
+  const workingDaysAdjustedCount = useMemo(
+    () => activeWorkers.filter(w => (workingDaysOverrides[w.id] ?? DEFAULT_WORKING_DAYS) !== DEFAULT_WORKING_DAYS).length,
+    [activeWorkers, workingDaysOverrides]
+  )
 
   // Check if payslips are stale (live OT/Bonus sums don't match snapshot)
   const isStale = useMemo(() => {
@@ -99,7 +115,7 @@ const PayslipsTab = memo(function PayslipsTab({ payslips, otEntries, bonusEntrie
       onConfirm: async () => {
         setConfirmDialog(null)
         setCreating(true); setError(null)
-        const result = await onCreatePayslips(month, year, workingDays)
+        const result = await onCreatePayslips(month, year, workingDaysMap)
         setCreating(false)
         if (result?.error) setError(result.error)
       }
@@ -134,11 +150,15 @@ const PayslipsTab = memo(function PayslipsTab({ payslips, otEntries, bonusEntrie
         </div>
         {isAdmin && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>Working Days:</label>
-              <input type="number" min="1" max="31" value={workingDays} onChange={e => setWorkingDays(parseInt(e.target.value) || 26)}
-                style={{ width: 56, padding: '6px 8px', border: '1.5px solid #e4e9f0', borderRadius: 6, fontSize: 13, textAlign: 'center', fontFamily: 'inherit' }} />
-            </div>
+            <button onClick={() => setShowWorkingDaysPanel(v => !v)} style={{
+              display: 'flex', alignItems: 'center', gap: 7, padding: '9px 14px',
+              background: showWorkingDaysPanel ? '#eff6ff' : '#fff', color: workingDaysAdjustedCount > 0 ? '#2563eb' : '#374151',
+              border: `1.5px solid ${workingDaysAdjustedCount > 0 ? '#93c5fd' : '#e4e9f0'}`, borderRadius: 8,
+              fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+              Working Days{workingDaysAdjustedCount > 0 ? ` (${workingDaysAdjustedCount} adjusted)` : ''}
+              <span style={{ fontSize: 10, transform: showWorkingDaysPanel ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>▾</span>
+            </button>
             <button id="create-payslips-btn" onClick={handleCreate} disabled={creating} style={{
               display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px',
               background: creating ? '#93c5fd' : '#2563eb', color: '#fff', border: 'none', borderRadius: 8,
@@ -150,6 +170,42 @@ const PayslipsTab = memo(function PayslipsTab({ payslips, otEntries, bonusEntrie
           </div>
         )}
       </div>
+
+      {isAdmin && showWorkingDaysPanel && (
+        <div style={{ marginBottom: 20, background: '#fff', border: '1px solid #e4e9f0', borderRadius: 12, padding: 16, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>Working days per worker</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>Defaults to {DEFAULT_WORKING_DAYS}. Lower this for anyone who took leave — their basic salary and OT rate will be prorated accordingly.</div>
+            </div>
+            {workingDaysAdjustedCount > 0 && (
+              <button onClick={() => setWorkingDaysOverrides({})} style={{
+                fontSize: 12, fontWeight: 600, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+              }}>Reset all to {DEFAULT_WORKING_DAYS}</button>
+            )}
+          </div>
+          {activeWorkers.length === 0 ? (
+            <div style={{ fontSize: 13, color: '#94a3b8', padding: '8px 0' }}>No active workers.</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+              {activeWorkers.map(w => (
+                <div key={w.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', background: '#f8fafc', borderRadius: 8, border: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
+                  <input
+                    type="number" min="1" max="31"
+                    value={workingDaysMap[w.id]}
+                    onChange={e => {
+                      const val = parseInt(e.target.value)
+                      setWorkingDaysOverrides(prev => ({ ...prev, [w.id]: isNaN(val) ? DEFAULT_WORKING_DAYS : val }))
+                    }}
+                    style={{ width: 48, padding: '5px 6px', border: '1.5px solid #e4e9f0', borderRadius: 6, fontSize: 13, textAlign: 'center', fontFamily: 'inherit', flexShrink: 0 }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {isStale && isAdmin && (
         <div style={{

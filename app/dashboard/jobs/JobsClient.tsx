@@ -7,7 +7,7 @@ import JobModal from "./JobModal";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal, CompleteJobModal } from "@/components/StageModals";
 import { updateJobStage, deleteJob } from "@/app/actions/jobActions";
-import { JOB_STAGES, getStageDisplay, getStageDB, LEAD_SOURCES } from "@/lib/constants";
+import { JOB_STAGES, getStageDisplay, getStageDB, LEAD_SOURCES, getSourceDisplay } from "@/lib/constants";
 
 export type Job = {
   id: string;
@@ -473,7 +473,7 @@ export default function JobsClient({
           >
             <option value="All">All Sources</option>
             {LEAD_SOURCES.map(s => (
-              <option key={s} value={s}>{s}</option>
+              <option key={s} value={s}>{getSourceDisplay(s)}</option>
             ))}
           </select>
 

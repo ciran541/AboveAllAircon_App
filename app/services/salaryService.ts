@@ -270,11 +270,21 @@ export async function getPayslips(month: number, year: number) {
   return { payslips: data ?? [] }
 }
 
+/** Baseline days used to prorate a worker's full monthly basic_salary. */
+const STANDARD_WORKING_DAYS = 26
+
 /**
  * Core function: Creates monthly payslips for all active workers.
  * Snapshots worker data and calculates all OT + bonus fields.
+ *
+ * workingDaysByWorker maps worker_id -> days worked that month. Workers not
+ * present in the map fall back to STANDARD_WORKING_DAYS (a full month).
  */
-export async function createMonthlyPayslips(month: number, year: number, workingDays: number = 26) {
+export async function createMonthlyPayslips(
+  month: number,
+  year: number,
+  workingDaysByWorker: Record<string, number> = {}
+) {
   const supabase = await createClient()
 
   // 1. Get all active workers
@@ -342,8 +352,10 @@ export async function createMonthlyPayslips(month: number, year: number, working
   const payslipRows = workers
     .filter(w => !signedWorkerIds.has(w.id))
     .map(w => {
-      const basicSalary = Number(w.basic_salary)
-      const otPerHour = basicSalary / 26 / 8 * 1.5
+      const fullBasicSalary = Number(w.basic_salary)
+      const workingDays = workingDaysByWorker[w.id] ?? STANDARD_WORKING_DAYS
+      const basicSalary = fullBasicSalary * (workingDays / STANDARD_WORKING_DAYS)
+      const otPerHour = fullBasicSalary / workingDays / 8 * 1.5
       const additional3hrOt = workingDays * 3
       const additionalOt = otByWorker[w.id] ?? 0
       const totalOt = additional3hrOt + additionalOt
@@ -357,7 +369,7 @@ export async function createMonthlyPayslips(month: number, year: number, working
         year,
         worker_name: w.name,
         wp_number: w.wp_number ?? '',
-        basic_salary: basicSalary,
+        basic_salary: Math.round(basicSalary * 100) / 100,
         bank_account: w.bank_account ?? '',
         working_days: workingDays,
         ot_per_hour: Math.round(otPerHour * 100) / 100,

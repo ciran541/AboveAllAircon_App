@@ -110,10 +110,14 @@ export async function getPayslips(month: number, year: number) {
   return SalaryService.getPayslips(month, year);
 }
 
-export async function createMonthlyPayslips(month: number, year: number, workingDays?: number) {
+export async function createMonthlyPayslips(
+  month: number,
+  year: number,
+  workingDaysByWorker?: Record<string, number>
+) {
   const user = await getAuthUser();
   if (user.role !== "admin") return { error: "Unauthorized" };
-  return SalaryService.createMonthlyPayslips(month, year, workingDays);
+  return SalaryService.createMonthlyPayslips(month, year, workingDaysByWorker);
 }
 
 export async function signPayslip(payslipId: string, signatureData?: string) {

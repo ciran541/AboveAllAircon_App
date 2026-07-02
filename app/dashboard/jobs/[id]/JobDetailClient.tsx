@@ -9,7 +9,7 @@ import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal,
 import { updateJobFields, deleteJob as deleteJobAction, updateJobStage } from "@/app/actions/jobActions";
 import { logJobMaterial, removeJobMaterial } from "@/app/actions/inventoryActions";
 import { updateCustomerDetails } from "@/app/actions/customerActions";
-import { JOB_STAGES as STAGES, getStageDisplay, getStageDB, UNIT_TYPES, LEAD_SOURCES } from "@/lib/constants";
+import { JOB_STAGES as STAGES, getStageDisplay, getStageDB, UNIT_TYPES, LEAD_SOURCES, getSourceDisplay } from "@/lib/constants";
 import { TimePickerUncontrolled } from "@/components/TimePicker";
 
 export default function JobDetailClient({
@@ -755,10 +755,10 @@ export default function JobDetailClient({
                   <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", marginBottom: 6 }}>Source</div>
                   {isEditing ? (
                     <select name="source" defaultValue={job.source} className="form-input">
-                      {LEAD_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      {LEAD_SOURCES.map((s) => <option key={s} value={s}>{getSourceDisplay(s)}</option>)}
                     </select>
                   ) : (
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "#475569" }}>{job.source}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#475569" }}>{getSourceDisplay(job.source)}</span>
                   )}
                 </div>
                 <div style={{ paddingTop: 20 }}>
