@@ -32,17 +32,16 @@ export default async function CustomersPage({
     query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
   }
 
-  const { data: customers } = await query;
-
   // Also get total count to know if we can load more
   let countQuery = supabase
     .from("customers")
     .select("*", { count: "exact", head: true });
-    
+
   if (search) {
      countQuery = countQuery.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
   }
-  const { count } = await countQuery;
+
+  const [{ data: customers }, { count }] = await Promise.all([query, countQuery]);
 
   return (
     <CustomersClient 

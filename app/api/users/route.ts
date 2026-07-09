@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { revalidateTag } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -81,6 +82,12 @@ export async function POST(request: Request) {
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 500 })
   }
+
+  // The staff/profiles list is cached via unstable_cache (lib/staffCache.ts).
+  // { expire: 0 } forces immediate expiry, matching unstable_cache's legacy
+  // invalidation semantics (this project doesn't use Cache Components, where
+  // 'max'/stale-while-revalidate profiles would otherwise apply instead).
+  revalidateTag('profiles', { expire: 0 })
 
   return NextResponse.json({
     user: {

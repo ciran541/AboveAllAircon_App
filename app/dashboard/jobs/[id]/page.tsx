@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import JobDetailClient from './JobDetailClient'
 import Link from 'next/link'
+import { getCachedStaffProfiles } from '@/lib/staffCache'
 
 export default async function JobDetailPage({ params }: { params: { id: string } }) {
   const supabase = await createClient()
@@ -30,9 +31,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     `)
     .eq('job_id', id);
 
-  const staffProfilesPromise = adminClient
-    .from('profiles')
-    .select('id, full_name, role, name');
+  const staffProfilesPromise = getCachedStaffProfiles();
 
   const syncIssuesPromise = adminClient
     .from('sync_queue')
@@ -45,7 +44,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     { data: authData },
     { data: job, error },
     { data: materials },
-    { data: staffProfiles },
+    staffProfiles,
     { data: syncIssues }
   ] = await Promise.all([userPromise, jobPromise, materialsPromise, staffProfilesPromise, syncIssuesPromise]);
 

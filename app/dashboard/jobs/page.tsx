@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import JobsClient from "./JobsClient";
 import { JOB_STAGES, getStageDB } from "@/lib/constants";
+import { getCachedStaffProfiles } from "@/lib/staffCache";
 
 export const dynamic = "force-dynamic";
 
@@ -118,9 +119,7 @@ export default async function JobsPage({
 
   // Parallelize Auth check, staff profiles, and jobs fetch
   const userPromise = supabase.auth.getUser();
-  const profilesPromise = supabase
-    .from("profiles")
-    .select("id, role, full_name, name, email");
+  const profilesPromise = getCachedStaffProfiles();
 
   if (view === "list") {
     const { cursor_created_at, cursor_id } = params;
@@ -138,13 +137,13 @@ export default async function JobsPage({
     }
 
     const [userRes, profilesRes, jobsRes] = await Promise.all([userPromise, profilesPromise, query]);
-    
+
     if (!userRes.data.user) redirect("/login");
 
     const rows = jobsRes.data || [];
     hasNextPage = rows.length > LIST_PAGE_SIZE;
     initialJobs = hasNextPage ? rows.slice(0, LIST_PAGE_SIZE) : rows;
-    staffProfiles = (profilesRes.data || []).map((p: any) => ({ ...p, email: p.email || "" }));
+    staffProfiles = (profilesRes || []).map((p: any) => ({ ...p, email: p.email || "" }));
   } else {
     // Pipeline view - we fetch active stages, but if a specific stage filter is active, we might narrow it down
     let activeStages = ["Site Visit Scheduled", "Quotation Sent", "Job Scheduled", "In Progress", "Second Visit", "Job Done (Payment Pending)"];
@@ -183,7 +182,7 @@ export default async function JobsPage({
       if (!seen.has(job.id)) seen.set(job.id, job);
     }
     initialJobs = Array.from(seen.values());
-    staffProfiles = (profilesRes.data || []).map((p: any) => ({ ...p, email: p.email || "" }));
+    staffProfiles = (profilesRes || []).map((p: any) => ({ ...p, email: p.email || "" }));
   }
 
   const userId = (await userPromise).data.user?.id; // will be cached by now

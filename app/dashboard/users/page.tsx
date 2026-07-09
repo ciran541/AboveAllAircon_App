@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getCachedStaffProfiles } from '@/lib/staffCache'
 import UsersClient from './UsersClient'
 
 export const dynamic = 'force-dynamic'
@@ -13,8 +14,10 @@ export default async function UsersPage() {
 
   // Fetch users via admin client
   const admin = createAdminClient()
-  const { data: authData } = await admin.auth.admin.listUsers()
-  const { data: profiles } = await admin.from('profiles').select('id, role, full_name')
+  const [{ data: authData }, profiles] = await Promise.all([
+    admin.auth.admin.listUsers(),
+    getCachedStaffProfiles(),
+  ])
 
   const profileMap = new Map(profiles?.map((p) => [p.id, p]) ?? [])
 
