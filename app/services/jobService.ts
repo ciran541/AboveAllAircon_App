@@ -4,13 +4,23 @@
  * Server-only domain service for jobs.
  * All direct Supabase mutations for jobs live here.
  * Server Actions call these functions; they never write to the DB themselves.
+ *
+ * External syncs (Calendar / Sheets backup / Meta-lead) are never awaited
+ * inline here — that used to expose every save to external-API latency and
+ * Vercel's serverless timeout, which is how a Calendar sync once failed
+ * silently. Instead, a save enqueues sync_queue rows and schedules
+ * processJobQueue() via after() to run once the response has been sent
+ * (see lib/syncProcessor.ts). Failures are retried with backoff and surfaced
+ * durably on the Job Detail page instead of a one-time alert().
  */
 
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
-import { batchSyncCalendarEvents, deleteCalendarEvent } from "@/lib/googleCalendar";
+import { deleteCalendarEvent } from "@/lib/googleCalendar";
 import { getStageDB } from "@/lib/constants";
-import { logJobToSheets, logMetaLeadToSheets } from "@/lib/sheetsBackup";
+import { processJobQueue, processQueueRow, type SyncIntegration } from "@/lib/syncProcessor";
 
 /** Invalidates all cached job data for a specific user + the admin dashboard. */
 function invalidateJobCaches(userId?: string) {
@@ -20,105 +30,26 @@ function invalidateJobCaches(userId?: string) {
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
-// ── Internal calendar sync ────────────────────────────────────────────────────
+// ── Internal sync enqueue ─────────────────────────────────────────────────────
 
 /**
- * Reads the current job row and reconciles all three calendar event types
- * (site visit, job-scheduled, second visit):
- *   - date present  → upsert, persist returned eventId
- *   - date absent   → delete (if one exists), clear eventId
- *
- * Calendar errors are non-fatal: returns them as a string so the caller
- * can surface a soft warning without blocking the UI.
+ * Queues Calendar + Sheets (+ Meta-lead, if applicable) sync for a job and
+ * schedules background processing. Returns as soon as the rows are queued —
+ * the actual external API calls happen after this request's response is sent.
  */
-async function syncAllCalendarEvents(
+async function enqueueAndProcess(
   jobId: string,
+  job: any,
   supabase: SupabaseClient
-): Promise<{ calendarError?: string }> {
-  const { data: job, error: fetchError } = await supabase
-    .from("jobs")
-    .select(
-      "id, service_type, notes, " +
-        "visit_date, visit_time, job_date, job_time, second_visit_date, second_visit_time, " +
-        "visit_event_id, job_event_id, second_visit_event_id, " +
-        "customers(name, phone, address)"
-    )
-    .eq("id", jobId)
-    .single();
+): Promise<void> {
+  const integrations: SyncIntegration[] = ["calendar", "sheets"];
+  if (job?.source === "Meta") integrations.push("meta_lead");
 
-  if (fetchError || !job) {
-    return {
-      calendarError:
-        fetchError?.message ?? "Unable to fetch job for calendar sync.",
-    };
+  for (const integration of integrations) {
+    await supabase.rpc("enqueue_sync", { p_job_id: jobId, p_integration: integration });
   }
 
-  const jobData = job as any;
-  const customers = Array.isArray(jobData.customers)
-    ? jobData.customers[0]
-    : jobData.customers;
-  const jobBase = {
-    id: jobData.id,
-    service_type: jobData.service_type,
-    notes: jobData.notes,
-    customers,
-  };
-
-  const schedule = [
-    {
-      type: "site_visit" as const,
-      date: jobData.visit_date as string | null,
-      time: jobData.visit_time as string | null,
-      existingId: jobData.visit_event_id as string | null,
-      col: "visit_event_id",
-    },
-    {
-      type: "job" as const,
-      date: jobData.job_date as string | null,
-      time: jobData.job_time as string | null,
-      existingId: jobData.job_event_id as string | null,
-      col: "job_event_id",
-    },
-    {
-      type: "second_visit" as const,
-      date: jobData.second_visit_date as string | null,
-      time: jobData.second_visit_time as string | null,
-      existingId: jobData.second_visit_event_id as string | null,
-      col: "second_visit_event_id",
-    },
-  ];
-
-  // Build upsert / delete lists
-  const upserts = schedule
-    .filter((s) => s.date)
-    .map((s) => ({
-      type: s.type,
-      job: jobBase,
-      date: s.date!,
-      time: s.time ?? null,
-      existingEventId: s.existingId,
-      col: s.col,
-    }));
-
-  const deletes = schedule
-    .filter((s) => !s.date && s.existingId)
-    .map((s) => ({ eventId: s.existingId!, col: s.col }));
-
-  if (upserts.length === 0 && deletes.length === 0) return {};
-
-  // Single token fetch, all operations in parallel
-  const { saved, cleared, errors } = await batchSyncCalendarEvents({ upserts, deletes });
-
-  // Persist all updated event IDs in one DB call
-  const dbUpdate: Record<string, string | null> = {};
-  for (const [col, eventId] of Object.entries(saved)) dbUpdate[col] = eventId;
-  for (const col of cleared) dbUpdate[col] = null;
-
-  if (Object.keys(dbUpdate).length > 0) {
-    await supabase.from("jobs").update(dbUpdate).eq("id", jobId);
-  }
-
-  return errors.length > 0 ? { calendarError: errors.join(" | ") } : {};
+  after(() => processJobQueue(jobId));
 }
 
 // ── Exported service functions ────────────────────────────────────────────────
@@ -126,13 +57,13 @@ async function syncAllCalendarEvents(
 /**
  * Transitions a job to a new stage and applies any additional field updates.
  * Handles the "First Visit" → "In Progress" DB mapping transparently.
- * Syncs all Google Calendar events after the DB write.
+ * Queues Calendar/Sheets sync after the DB write.
  */
 export async function transitionStage(
   jobId: string,
   targetStage: string,
   updates: Record<string, any> = {}
-): Promise<{ success?: boolean; calendarError?: string | null; error?: string }> {
+): Promise<{ success?: boolean; error?: string }> {
   const supabase = await createClient();
   const dbStage = getStageDB(targetStage);
 
@@ -145,22 +76,16 @@ export async function transitionStage(
 
   if (error) return { error: error.message };
 
-  // Await calendar sync — must complete before function returns on Vercel serverless
-  // (un-awaited promises are killed when the function exits, causing duplicate events)
-  const { calendarError } = await syncAllCalendarEvents(jobId, supabase);
-
-  // Google Sheets backup — void return, handles its own errors internally
-  logJobToSheets(updatedJob);
-  logMetaLeadToSheets(updatedJob);
+  await enqueueAndProcess(jobId, updatedJob, supabase);
 
   invalidateJobCaches();
-  return { success: true, calendarError: calendarError ?? null };
+  return { success: true };
 }
 
 /**
  * Updates arbitrary fields on a job (no stage-transition logic).
  * Used by the admin edit form and the Job Detail page.
- * Syncs all Google Calendar events after the DB write.
+ * Queues Calendar/Sheets sync after the DB write.
  */
 export async function updateFields(
   jobId: string,
@@ -168,7 +93,6 @@ export async function updateFields(
 ): Promise<{
   success?: boolean;
   data?: any;
-  calendarError?: string | null;
   error?: string;
 }> {
   const supabase = await createClient();
@@ -182,15 +106,45 @@ export async function updateFields(
 
   if (error) return { error: error.message };
 
-  // Await calendar sync — must complete before function returns on Vercel serverless
-  const { calendarError } = await syncAllCalendarEvents(jobId, supabase);
-
-  // Google Sheets backup — void return, handles its own errors internally
-  logJobToSheets(data);
-  logMetaLeadToSheets(data);
+  await enqueueAndProcess(jobId, data, supabase);
 
   invalidateJobCaches();
-  return { success: true, data, calendarError: calendarError ?? null };
+  return { success: true, data };
+}
+
+/**
+ * Re-runs sync for a single job/integration pair immediately (not queued),
+ * so the "Retry" banner on the Job Detail page can show pass/fail right away.
+ */
+export async function retrySync(
+  jobId: string,
+  integration: SyncIntegration
+): Promise<{ success?: boolean; error?: string }> {
+  const admin = createAdminClient();
+  const nowIso = new Date().toISOString();
+
+  const { data: row, error } = await admin
+    .from("sync_queue")
+    .update({ status: "processing", attempts: 0, claimed_at: nowIso, updated_at: nowIso })
+    .eq("job_id", jobId)
+    .eq("integration", integration)
+    .select()
+    .single();
+
+  if (error || !row) {
+    return { error: error?.message ?? "No sync record found for this job/integration." };
+  }
+
+  await processQueueRow(admin, row as any);
+
+  const { data: finalRow } = await admin
+    .from("sync_queue")
+    .select("last_error")
+    .eq("id", row.id)
+    .single();
+
+  invalidateJobCaches();
+  return finalRow?.last_error ? { error: finalRow.last_error } : { success: true };
 }
 
 /**
@@ -229,7 +183,7 @@ export async function deleteJob(
 /**
  * Creates a new job or updates an existing one.
  * Handles optional new-customer creation atomically.
- * Syncs all Google Calendar events after the DB write.
+ * Queues Calendar/Sheets sync after the DB write.
  */
 export async function saveJob(
   dataToSave: any,
@@ -242,7 +196,6 @@ export async function saveJob(
 ): Promise<{
   success?: boolean;
   savedJob?: any;
-  calendarError?: string | null;
   error?: string;
 }> {
   const supabase = await createClient();
@@ -293,15 +246,10 @@ export async function saveJob(
       fullJob = data;
     }
 
-    // Await calendar sync — must complete before function returns on Vercel serverless
-    const { calendarError } = await syncAllCalendarEvents(fullJob.id, supabase);
-
-    // Google Sheets backup — void return, handles its own errors internally
-    logJobToSheets(fullJob);
-    logMetaLeadToSheets(fullJob);
+    await enqueueAndProcess(fullJob.id, fullJob, supabase);
 
     invalidateJobCaches();
-    return { success: true, savedJob: fullJob, calendarError: calendarError ?? null };
+    return { success: true, savedJob: fullJob };
   } catch (err: any) {
     return { error: err.message };
   }

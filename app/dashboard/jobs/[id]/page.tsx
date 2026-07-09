@@ -34,13 +34,20 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     .from('profiles')
     .select('id, full_name, role, name');
 
+  const syncIssuesPromise = adminClient
+    .from('sync_queue')
+    .select('id, integration, status, last_error')
+    .eq('job_id', id)
+    .eq('status', 'failed');
+
   // 2. Await them all at once (huge latency drop)
   const [
     { data: authData },
     { data: job, error },
     { data: materials },
-    { data: staffProfiles }
-  ] = await Promise.all([userPromise, jobPromise, materialsPromise, staffProfilesPromise]);
+    { data: staffProfiles },
+    { data: syncIssues }
+  ] = await Promise.all([userPromise, jobPromise, materialsPromise, staffProfilesPromise, syncIssuesPromise]);
 
   if (error || !job) {
     console.error('Job Detail Fetch Error:', error);
@@ -70,10 +77,11 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         </Link>
       </div>
       
-      <JobDetailClient 
-        initialJob={enrichedJob} 
-        initialMaterials={materials || []} 
+      <JobDetailClient
+        initialJob={enrichedJob}
+        initialMaterials={materials || []}
         staffProfiles={staffProfiles || []}
+        initialSyncIssues={syncIssues || []}
       />
     </div>
   )

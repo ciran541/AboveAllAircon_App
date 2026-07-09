@@ -34,6 +34,14 @@ export async function deleteJob(jobId: string) {
 }
 
 /**
+ * Re-runs sync for a job/integration pair (e.g. after a previous sync failure).
+ * Delegates entirely to JobService.
+ */
+export async function retrySync(jobId: string, integration: "calendar" | "sheets" | "meta_lead") {
+  return JobService.retrySync(jobId, integration);
+}
+
+/**
  * Creates a new job or updates an existing one (used by JobModal).
  * Delegates entirely to JobService.
  */

@@ -1,12 +1,15 @@
 /**
  * lib/sheetsBackup.ts
  *
- * Fire-and-forget backup: posts a job snapshot to the Google Apps Script
- * Web App which writes/updates a row in the "Above_All_Aircon_Backup" sheet.
+ * Posts a job snapshot to the Google Apps Script Web App which writes/updates
+ * a row in the "Above_All_Aircon_Backup" sheet (and, for Meta-sourced leads,
+ * a separate lead-tracking sheet).
  *
- * - NEVER throws — all errors are swallowed and logged silently.
- * - NEVER awaited by callers — runs completely in the background.
- * - Has zero impact on response time or DB operations.
+ * Both functions are awaited by the sync queue processor (lib/syncProcessor.ts)
+ * and throw on failure so the processor can record it and retry — they used to
+ * be fire-and-forget with errors only console.warn'd, which meant a failed
+ * backup was both unreliable (an un-awaited promise can be killed by the
+ * serverless runtime before it finishes) and untraceable.
  */
 
 import { JOB_STAGES, getStageDisplay } from "@/lib/constants";
@@ -69,10 +72,11 @@ function buildPayload(job: any): Record<string, string> {
 }
 
 /**
- * Call this AFTER a successful DB write.
- * Usage: logJobToSheets(savedJob)   ← no await, no try/catch needed by caller
+ * Call this AFTER a successful DB write. Throws on any failure (missing env,
+ * non-OK response, network error) — the caller (sync queue processor) is
+ * responsible for catching, recording, and retrying.
  */
-export function logJobToSheets(job: any): void {
+export async function logJobToSheets(job: any): Promise<void> {
   if (!SHEETS_WEBHOOK_URL) {
     // Env var not set — silently skip (e.g. in local dev without the URL)
     return;
@@ -80,21 +84,17 @@ export function logJobToSheets(job: any): void {
 
   const payload = buildPayload(job);
 
-  // Fire and forget — intentionally not awaited
-  fetch(SHEETS_WEBHOOK_URL, {
+  const res = await fetch(SHEETS_WEBHOOK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ secret: SHEETS_BACKUP_SECRET, ...payload }),
-  })
-    .then(async (res) => {
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        console.warn("[SheetsBackup] Non-OK response:", res.status, text);
-      }
-    })
-    .catch((err) => {
-      console.warn("[SheetsBackup] Failed to log job:", err?.message ?? err);
-    });
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Sheets backup failed: ${res.status} ${text}`);
+  }
 }
 
 /**
@@ -103,9 +103,9 @@ export function logJobToSheets(job: any): void {
  * access, so they can see lead volume / qualification / conversion and
  * optimize their campaigns. No-op for jobs from any other source.
  *
- * Usage: logMetaLeadToSheets(savedJob)   ← no await, no try/catch needed by caller
+ * Throws on failure — see logJobToSheets doc above.
  */
-export function logMetaLeadToSheets(job: any): void {
+export async function logMetaLeadToSheets(job: any): Promise<void> {
   if (!META_LEADS_WEBHOOK_URL || job?.source !== "Meta") return;
 
   const customer = Array.isArray(job.customers) ? job.customers[0] : job.customers;
@@ -123,19 +123,15 @@ export function logMetaLeadToSheets(job: any): void {
     last_synced: new Date().toISOString(),
   };
 
-  // Fire and forget — intentionally not awaited
-  fetch(META_LEADS_WEBHOOK_URL, {
+  const res = await fetch(META_LEADS_WEBHOOK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ secret: META_LEADS_SECRET, ...payload }),
-  })
-    .then(async (res) => {
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        console.warn("[SheetsBackup] Meta lead — non-OK response:", res.status, text);
-      }
-    })
-    .catch((err) => {
-      console.warn("[SheetsBackup] Failed to log Meta lead:", err?.message ?? err);
-    });
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Meta lead sync failed: ${res.status} ${text}`);
+  }
 }

@@ -184,8 +184,6 @@ export default function JobsClient({
       if (result.error) {
         alert("Error updating job: " + result.error);
         router.refresh(); // rollback on error
-      } else if (result.calendarError) {
-        alert("Job updated, but Google Calendar sync failed: " + result.calendarError);
       }
       setActionLoading(false);
     });

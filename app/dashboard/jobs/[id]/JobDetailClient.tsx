@@ -6,25 +6,35 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import InvoicePreviewModal from "@/components/InvoicePreviewModal";
 import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal, CompleteJobModal } from "@/components/StageModals";
-import { updateJobFields, deleteJob as deleteJobAction, updateJobStage } from "@/app/actions/jobActions";
+import { updateJobFields, deleteJob as deleteJobAction, updateJobStage, retrySync } from "@/app/actions/jobActions";
 import { logJobMaterial, removeJobMaterial } from "@/app/actions/inventoryActions";
 import { updateCustomerDetails } from "@/app/actions/customerActions";
 import { JOB_STAGES as STAGES, getStageDisplay, getStageDB, UNIT_TYPES, LEAD_SOURCES, getSourceDisplay } from "@/lib/constants";
 import { TimePickerUncontrolled } from "@/components/TimePicker";
 
+const SYNC_LABELS: Record<string, string> = {
+  calendar: "Google Calendar sync",
+  sheets: "Sheets backup sync",
+  meta_lead: "Meta lead sync",
+};
+
 export default function JobDetailClient({
   initialJob,
   initialMaterials,
   staffProfiles,
+  initialSyncIssues,
 }: {
   initialJob: any;
   initialMaterials: any[];
   staffProfiles: any[];
+  initialSyncIssues: { id: string; integration: string; status: string; last_error: string | null }[];
 }) {
   const [job, setJob] = useState(initialJob);
   const [materials, setMaterials] = useState(initialMaterials);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [syncIssues, setSyncIssues] = useState(initialSyncIssues);
+  const [retryingSync, setRetryingSync] = useState<string | null>(null);
   const [showCRMPanel, setShowCRMPanel] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [editedNotes, setEditedNotes] = useState(initialJob.notes || "");
@@ -77,6 +87,21 @@ export default function JobDetailClient({
     return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
   };
 
+  // ── Sync retry (Calendar / Sheets / Meta-lead) ──────────────
+  const handleRetrySync = async (integration: string) => {
+    setRetryingSync(integration);
+    const result = await retrySync(job.id, integration as any);
+    if (result.error) {
+      setSyncIssues((prev) =>
+        prev.map((issue) => (issue.integration === integration ? { ...issue, last_error: result.error! } : issue))
+      );
+      alert(`${SYNC_LABELS[integration] ?? integration} still failing: ${result.error}`);
+    } else {
+      setSyncIssues((prev) => prev.filter((issue) => issue.integration !== integration));
+    }
+    setRetryingSync(null);
+  };
+
   // ── Stage advance ──────────────────────────────────────────
   const advanceStage = async (newStage: string, extraFields?: Record<string, any>) => {
     const dbStage = getStageDB(newStage);
@@ -94,9 +119,6 @@ export default function JobDetailClient({
       setJob(oldJob); // Rollback
     } else if (result.data) {
       setJob((prev: any) => ({ ...prev, ...result.data }));
-      if (result.calendarError) {
-        alert("Stage saved, but Google Calendar sync failed: " + result.calendarError);
-      }
     }
     setLoading(false);
   };
@@ -242,9 +264,6 @@ export default function JobDetailClient({
       const newStaff = staffProfiles.find((s: any) => s.id === result.data.assigned_to);
       setJob({ ...job, ...result.data, assigned_staff: newStaff || null });
       setIsEditing(false);
-      if (result.calendarError) {
-        alert("Changes saved, but Google Calendar sync failed: " + result.calendarError);
-      }
     } else {
       alert(result.error);
     }
@@ -325,6 +344,27 @@ export default function JobDetailClient({
             )}
           </div>
         </div>
+
+        {/* ── CALENDAR SYNC FAILURE (persistent, not a dismissible alert) ── */}
+        {syncIssues.map((issue) => (
+          <div key={issue.id} style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <span style={{ fontSize: 20, lineHeight: 1 }}>⚠️</span>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#991b1b" }}>{SYNC_LABELS[issue.integration] ?? issue.integration} failed for this job</div>
+                <div style={{ fontSize: 12, color: "#b91c1c", marginTop: 2 }}>{issue.last_error}</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleRetrySync(issue.integration)}
+              disabled={retryingSync === issue.integration}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#dc2626", color: "#fff", fontWeight: 700, fontSize: 13, cursor: retryingSync === issue.integration ? "default" : "pointer", whiteSpace: "nowrap" }}
+            >
+              {retryingSync === issue.integration ? "Retrying..." : "Retry"}
+            </button>
+          </div>
+        ))}
 
         {/* ── STAGE TIMELINE (read-only) ── */}
         <div style={{ background: "#fff", padding: "28px 32px", borderRadius: 16, border: "1px solid #e2e8f0" }}>

@@ -132,9 +132,6 @@ export default function JobModal({
     if (response.error) {
       setError(response.error);
     } else if (response.savedJob) {
-      if (response.calendarError) {
-        alert(`Job saved, but Google Calendar sync failed: ${response.calendarError}`);
-      }
       onSave(response.savedJob);
     }
 
