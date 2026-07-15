@@ -26,7 +26,6 @@ type UpsertParams = {
 type CalendarEventPayload = {
   summary: string;
   description: string;
-  colorId: string;
   start: { dateTime: string; timeZone: string };
   end: { dateTime: string; timeZone: string };
 };
@@ -163,7 +162,6 @@ function buildEventPayload(params: UpsertParams): CalendarEventPayload {
       `Address: ${customerAddress}`,
       `Notes: ${jobNotes}`,
     ].join("\n"),
-    colorId: config.colorId,
     start: { dateTime: start, timeZone: timezone },
     end: { dateTime: end, timeZone: timezone },
   };
@@ -204,6 +202,15 @@ async function _upsertWithToken(
     ? `/calendars/${calendarId}/events/${encodeURIComponent(params.existingEventId)}`
     : `/calendars/${calendarId}/events`;
 
+  // Only set colorId on create. PATCH is a partial update — omitting a field
+  // leaves it untouched on the existing event — so once created, an event's
+  // color is left alone forever. This lets manual recoloring done directly in
+  // Calendar (e.g. marking a job orange for "given to subcon") survive every
+  // future sync instead of being silently reset back to the default on the
+  // next job edit.
+  const body: CalendarEventPayload & { colorId?: string } =
+    method === "POST" ? { ...payload, colorId: EVENT_CONFIG[params.type].colorId } : payload;
+
   return withRetry(async () => {
     const response = await fetch(`${CALENDAR_API_BASE}${eventPath}`, {
       method,
@@ -211,7 +218,7 @@ async function _upsertWithToken(
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
       cache: "no-store",
     });
 
