@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { processQueueRow, type SyncQueueRow } from "@/lib/syncProcessor";
+import { processQueueRow, checkCalendarDrift, type SyncQueueRow } from "@/lib/syncProcessor";
 
 export const maxDuration = 60;
 
@@ -11,6 +11,11 @@ export const maxDuration = 60;
  * only catches rows that after() didn't manage to finish (crashed
  * invocation, hit maxDuration, etc.) or that exhausted their earlier
  * backoff window.
+ *
+ * Also runs the calendar drift check — catches events that were manually
+ * deleted directly in Calendar (soft-deleted to "cancelled", invisible in
+ * the UI) since these never surface as a sync_queue failure: our own PATCH
+ * against that same event id still returns 200 OK.
  */
 export async function GET(request: Request) {
   const auth = request.headers.get("authorization");
@@ -31,5 +36,7 @@ export async function GET(request: Request) {
   const rows = (claimed ?? []) as SyncQueueRow[];
   await Promise.allSettled(rows.map((row) => processQueueRow(admin, row)));
 
-  return NextResponse.json({ claimed: rows.length });
+  const drift = await checkCalendarDrift(admin);
+
+  return NextResponse.json({ claimed: rows.length, drift });
 }

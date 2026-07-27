@@ -16,7 +16,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { batchSyncCalendarEvents } from "@/lib/googleCalendar";
+import { batchSyncCalendarEvents, getCalendarEventStatus, logCalendarEvent } from "@/lib/googleCalendar";
 import { logJobToSheets, logMetaLeadToSheets } from "@/lib/sheetsBackup";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -74,7 +74,7 @@ async function syncCalendarForJob(admin: AdminClient, jobId: string): Promise<vo
 
   const deletes = schedule
     .filter((s) => !s.date && s.existingId)
-    .map((s) => ({ eventId: s.existingId as string, col: s.col }));
+    .map((s) => ({ eventId: s.existingId as string, col: s.col, jobId, type: s.type }));
 
   if (upserts.length === 0 && deletes.length === 0) return;
 
@@ -138,4 +138,63 @@ export async function processJobQueue(jobId: string): Promise<void> {
   });
   if (error || !claimed) return;
   await Promise.allSettled((claimed as SyncQueueRow[]).map((row) => processQueueRow(admin, row)));
+}
+
+/**
+ * Proactively checks every active job's calendar event(s) for drift — most
+ * notably a manual delete in Calendar, which soft-deletes to "cancelled"
+ * rather than purging, so our own PATCH-based sync would otherwise report
+ * "success" while the event stays invisible until the job happens to be
+ * edited again. Run daily from the cron safety-net route. Any drift found is
+ * logged (operation: "drift_detected") then immediately healed by re-running
+ * the normal calendar sync for that job, which logs its own create/update
+ * outcome the same way a regular sync would.
+ */
+export async function checkCalendarDrift(
+  admin: AdminClient
+): Promise<{ checked: number; driftFound: number }> {
+  const { data: jobs } = await admin
+    .from("jobs")
+    .select("id, visit_date, visit_event_id, job_date, job_event_id, second_visit_date, second_visit_event_id")
+    .or("visit_event_id.not.is.null,job_event_id.not.is.null,second_visit_event_id.not.is.null");
+
+  let checked = 0;
+  let driftFound = 0;
+  const jobsToHeal = new Set<string>();
+
+  for (const job of (jobs as any[]) ?? []) {
+    const slots = [
+      { date: job.visit_date, eventId: job.visit_event_id, type: "site_visit" as const },
+      { date: job.job_date, eventId: job.job_event_id, type: "job" as const },
+      { date: job.second_visit_date, eventId: job.second_visit_event_id, type: "second_visit" as const },
+    ];
+
+    for (const slot of slots) {
+      if (!slot.date || !slot.eventId) continue;
+      checked++;
+      let status: string | null;
+      try {
+        status = await getCalendarEventStatus(slot.eventId);
+      } catch {
+        continue; // transient API error — next day's check will retry
+      }
+      if (status === "cancelled") {
+        driftFound++;
+        await logCalendarEvent({
+          jobId: job.id,
+          eventType: slot.type,
+          operation: "drift_detected",
+          eventId: slot.eventId,
+          success: true,
+        });
+        jobsToHeal.add(job.id);
+      }
+    }
+  }
+
+  // syncCalendarForJob re-confirms every active slot for the job in one go,
+  // which forces status back to "confirmed" and logs its own outcome.
+  await Promise.allSettled(Array.from(jobsToHeal).map((jobId) => syncCalendarForJob(admin, jobId)));
+
+  return { checked, driftFound };
 }

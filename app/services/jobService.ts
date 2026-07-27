@@ -163,18 +163,26 @@ export async function deleteJob(
 
   if (fetchError) return { error: fetchError.message };
 
-  const eventIds = [
-    (job as any)?.visit_event_id,
-    (job as any)?.job_event_id,
-    (job as any)?.second_visit_event_id,
-  ].filter(Boolean) as string[];
+  const eventEntries = [
+    { id: (job as any)?.visit_event_id, type: "site_visit" as const },
+    { id: (job as any)?.job_event_id, type: "job" as const },
+    { id: (job as any)?.second_visit_event_id, type: "second_visit" as const },
+  ].filter((e) => e.id) as { id: string; type: "site_visit" | "job" | "second_visit" }[];
 
   const { error } = await supabase.from("jobs").delete().eq("id", jobId);
   if (error) return { error: error.message };
 
-  // Await all calendar deletions — must complete before returning on Vercel serverless
-  // (un-awaited promises are killed when the function exits, leaving orphaned calendar events)
-  await Promise.allSettled(eventIds.map((id) => deleteCalendarEvent(id)));
+  // Calendar cleanup runs *after* the response is sent, so the delete feels
+  // instant instead of blocking on 1-3 external Google Calendar calls. after()
+  // (unlike a bare un-awaited promise) is kept alive by the runtime until it
+  // finishes, so events still get cleaned up on Vercel serverless.
+  if (eventEntries.length > 0) {
+    after(() =>
+      Promise.allSettled(
+        eventEntries.map(({ id, type }) => deleteCalendarEvent(id, { jobId, type }))
+      )
+    );
+  }
 
   invalidateJobCaches();
   return { success: true };

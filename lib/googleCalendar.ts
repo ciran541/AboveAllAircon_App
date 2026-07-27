@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,10 @@ type CalendarEventPayload = {
   end: { dateTime: string; timeZone: string };
 };
 
+type DeleteMeta = { jobId?: string | null; type?: CalendarEventType | null };
+
+export type CalendarLogOperation = "create" | "update" | "delete" | "drift_detected";
+
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
@@ -56,6 +61,39 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs =
     }
   }
   throw new Error("unreachable");
+}
+
+// ── Audit log ─────────────────────────────────────────────────────────────────
+
+/**
+ * Records every Calendar mutation this app makes (or attempts), independent of
+ * outcome. This is a forensics/audit trail, not the retry mechanism (that's
+ * sync_queue) — it exists so a future "why did this event disappear" question
+ * can be answered definitively ("our app never touched it") instead of
+ * inferred after the fact from Calendar's own timestamps.
+ * Best-effort: a logging failure must never break the actual Calendar call.
+ */
+export async function logCalendarEvent(entry: {
+  jobId?: string | null;
+  eventType?: CalendarEventType | null;
+  operation: CalendarLogOperation;
+  eventId?: string | null;
+  success: boolean;
+  error?: string | null;
+}): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    await admin.from("calendar_event_log").insert({
+      job_id: entry.jobId ?? null,
+      event_type: entry.eventType ?? null,
+      operation: entry.operation,
+      event_id: entry.eventId ?? null,
+      success: entry.success,
+      error: entry.error ?? null,
+    });
+  } catch (err) {
+    console.error("[calendarEventLog] failed to write audit log:", err);
+  }
 }
 
 // ── JWT / Auth ────────────────────────────────────────────────────────────────
@@ -190,12 +228,39 @@ export async function upsertCalendarEvent(params: UpsertParams): Promise<{ event
 
 /**
  * Deletes a calendar event by its event ID. Safe to call even if the event no longer exists.
+ * `meta` is optional and only used for the audit log (lib/googleCalendar.ts's calendar_event_log).
  */
-export async function deleteCalendarEvent(eventId: string): Promise<void> {
+export async function deleteCalendarEvent(eventId: string, meta?: DeleteMeta): Promise<void> {
   if (!eventId) return;
   const calendarId = encodeURIComponent(getRequiredEnv("GOOGLE_CALENDAR_ID"));
   const token = await getAccessToken();
-  await _deleteWithToken(token, calendarId, eventId);
+  await _deleteWithToken(token, calendarId, eventId, meta);
+}
+
+/**
+ * Returns the event's current status ("confirmed" | "tentative" | "cancelled"),
+ * or null if the event is gone entirely (404/410). Used by the daily drift
+ * check to catch events that were manually deleted in Calendar (which
+ * soft-deletes to "cancelled" rather than purging) between app-triggered syncs.
+ */
+export async function getCalendarEventStatus(eventId: string): Promise<string | null> {
+  if (!eventId) return null;
+  const calendarId = encodeURIComponent(getRequiredEnv("GOOGLE_CALENDAR_ID"));
+  const token = await getAccessToken();
+
+  return withRetry(async () => {
+    const response = await fetch(
+      `${CALENDAR_API_BASE}/calendars/${calendarId}/events/${encodeURIComponent(eventId)}`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+    );
+    if (response.status === 404 || response.status === 410) return null;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to fetch calendar event status: ${response.status} ${errorText}`);
+    }
+    const data = (await response.json()) as { status?: string };
+    return data.status ?? null;
+  });
 }
 
 // ── Internal token-reusing helpers ────────────────────────────────────────────
@@ -219,49 +284,91 @@ async function _upsertWithToken(
   // next job edit.
   const body: CalendarEventPayload & { colorId?: string } =
     method === "POST" ? { ...payload, colorId: EVENT_CONFIG[params.type].colorId } : payload;
+  const operation: CalendarLogOperation = method === "POST" ? "create" : "update";
 
-  return withRetry(async () => {
-    const response = await fetch(`${CALENDAR_API_BASE}${eventPath}`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      cache: "no-store",
+  try {
+    const result = await withRetry(async () => {
+      const response = await fetch(`${CALENDAR_API_BASE}${eventPath}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Google Calendar upsert failed (${params.type}): ${response.status} ${errorText}`);
+      }
+
+      const data = (await response.json()) as { id?: string };
+      if (!data.id) throw new Error("Google Calendar response did not include event id.");
+      return { eventId: data.id };
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Google Calendar upsert failed (${params.type}): ${response.status} ${errorText}`);
-    }
-
-    const data = (await response.json()) as { id?: string };
-    if (!data.id) throw new Error("Google Calendar response did not include event id.");
-    return { eventId: data.id };
-  });
+    await logCalendarEvent({
+      jobId: params.job.id,
+      eventType: params.type,
+      operation,
+      eventId: result.eventId,
+      success: true,
+    });
+    return result;
+  } catch (err: any) {
+    await logCalendarEvent({
+      jobId: params.job.id,
+      eventType: params.type,
+      operation,
+      eventId: params.existingEventId ?? null,
+      success: false,
+      error: err?.message ?? String(err),
+    });
+    throw err;
+  }
 }
 
 async function _deleteWithToken(
   token: string,
   calendarId: string,
-  eventId: string
+  eventId: string,
+  meta?: DeleteMeta
 ): Promise<void> {
-  await withRetry(async () => {
-    const response = await fetch(
-      `${CALENDAR_API_BASE}/calendars/${calendarId}/events/${encodeURIComponent(eventId)}`,
-      {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
+  try {
+    await withRetry(async () => {
+      const response = await fetch(
+        `${CALENDAR_API_BASE}/calendars/${calendarId}/events/${encodeURIComponent(eventId)}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }
+      );
+      // 404 means it's already gone — that's fine
+      if (!response.ok && response.status !== 404) {
+        const errorText = await response.text();
+        throw new Error(`Google Calendar delete failed: ${response.status} ${errorText}`);
       }
-    );
-    // 404 means it's already gone — that's fine
-    if (!response.ok && response.status !== 404) {
-      const errorText = await response.text();
-      throw new Error(`Google Calendar delete failed: ${response.status} ${errorText}`);
-    }
-  });
+    });
+    await logCalendarEvent({
+      jobId: meta?.jobId,
+      eventType: meta?.type,
+      operation: "delete",
+      eventId,
+      success: true,
+    });
+  } catch (err: any) {
+    await logCalendarEvent({
+      jobId: meta?.jobId,
+      eventType: meta?.type,
+      operation: "delete",
+      eventId,
+      success: false,
+      error: err?.message ?? String(err),
+    });
+    throw err;
+  }
 }
 
 // ── Batch API (single token, parallel operations) ─────────────────────────────
@@ -275,7 +382,7 @@ export type BatchUpsertEntry = UpsertParams & { col: string };
  */
 export async function batchSyncCalendarEvents(ops: {
   upserts: (UpsertParams & { col: string })[];
-  deletes: { eventId: string; col: string }[];
+  deletes: (DeleteMeta & { eventId: string; col: string })[];
 }): Promise<{
   saved: Record<string, string>;   // col -> new eventId
   cleared: string[];               // col names to set null
@@ -297,9 +404,9 @@ export async function batchSyncCalendarEvents(ops: {
         errors.push(`[${params.type}] ${err.message}`);
       }
     }),
-    ...ops.deletes.map(async ({ eventId, col }) => {
+    ...ops.deletes.map(async ({ eventId, col, jobId, type }) => {
       try {
-        await _deleteWithToken(token, calendarId, eventId);
+        await _deleteWithToken(token, calendarId, eventId, { jobId, type });
         cleared.push(col);
       } catch (err: any) {
         errors.push(`[delete:${col}] ${err.message}`);
