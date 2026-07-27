@@ -20,7 +20,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { deleteCalendarEvent } from "@/lib/googleCalendar";
 import { getStageDB } from "@/lib/constants";
-import { processJobQueue, processQueueRow, type SyncIntegration } from "@/lib/syncProcessor";
+import {
+  processJobQueue,
+  processQueueRow,
+  syncCalendarNow,
+  type SyncIntegration,
+} from "@/lib/syncProcessor";
+import { diffJob, affectsCalendar, CALENDAR_JOB_FIELDS } from "@/lib/jobDiff";
 
 /** Invalidates all cached job data for a specific user + the admin dashboard. */
 function invalidateJobCaches(userId?: string) {
@@ -32,24 +38,80 @@ type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
 // ── Internal sync enqueue ─────────────────────────────────────────────────────
 
+/** How long a save will wait for calendar confirmation before backgrounding it. */
+const CALENDAR_CONFIRM_TIMEOUT_MS = 4000;
+
+/** The columns whose presence means this job belongs on the calendar at all. */
+const DATE_FIELDS = CALENDAR_JOB_FIELDS.filter((f) => f.endsWith("_date"));
+
+function hasAnyScheduledDate(job: any): boolean {
+  return DATE_FIELDS.some((f) => {
+    const v = job?.[f];
+    return typeof v === "string" ? v.trim() !== "" : Boolean(v);
+  });
+}
+
+export type SyncOutcome = {
+  /** Calendar sync ran and failed — surfaced to the user immediately. */
+  calendarError?: string;
+  /** Calendar sync is taking longer than the inline wait; still running. */
+  calendarPending?: boolean;
+};
+
 /**
- * Queues Calendar + Sheets (+ Meta-lead, if applicable) sync for a job and
- * schedules background processing. Returns as soon as the rows are queued —
- * the actual external API calls happen after this request's response is sent.
+ * Queues the integrations this save actually needs, then — when the calendar
+ * is among them — waits briefly for the calendar result so the person who
+ * made the change is told right away if it failed.
+ *
+ * `syncCalendar` is decided by a real field diff. Previously every save
+ * re-pushed all three calendar events, which meant editing the notes on a
+ * completed job generated calendar traffic and log noise for nothing.
  */
-async function enqueueAndProcess(
+async function enqueueAndSync(
   jobId: string,
   job: any,
-  supabase: SupabaseClient
-): Promise<void> {
-  const integrations: SyncIntegration[] = ["calendar", "sheets"];
+  supabase: SupabaseClient,
+  syncCalendar: boolean
+): Promise<SyncOutcome> {
+  const integrations: SyncIntegration[] = ["sheets"];
   if (job?.source === "Meta") integrations.push("meta_lead");
+  if (syncCalendar) integrations.push("calendar");
 
   for (const integration of integrations) {
     await supabase.rpc("enqueue_sync", { p_job_id: jobId, p_integration: integration });
   }
 
-  after(() => processJobQueue(jobId));
+  // Nothing calendar-related changed — everything can finish in the background.
+  if (!syncCalendar) {
+    after(() => processJobQueue(jobId));
+    return {};
+  }
+
+  const run = syncCalendarNow(jobId);
+
+  // Always hand the same promise to after(), so hitting the timeout degrades
+  // to background completion instead of abandoning an in-flight request.
+  after(async () => {
+    const { background } = await run.catch(() => ({ background: Promise.resolve() }));
+    await background.catch(() => {});
+  });
+
+  const timedOut = Symbol("timeout");
+  const raced = await Promise.race([
+    run,
+    new Promise<typeof timedOut>((resolve) =>
+      setTimeout(() => resolve(timedOut), CALENDAR_CONFIRM_TIMEOUT_MS)
+    ),
+  ]);
+
+  if (raced === timedOut) return { calendarPending: true };
+  return raced.calendarError ? { calendarError: raced.calendarError } : {};
+}
+
+/** Reads the row as it stands so a save can be diffed against it. */
+async function fetchCurrentJob(jobId: string, supabase: SupabaseClient) {
+  const { data } = await supabase.from("jobs").select("*").eq("id", jobId).single();
+  return data;
 }
 
 // ── Exported service functions ────────────────────────────────────────────────
@@ -63,23 +125,27 @@ export async function transitionStage(
   jobId: string,
   targetStage: string,
   updates: Record<string, any> = {}
-): Promise<{ success?: boolean; error?: string }> {
+): Promise<{ success?: boolean; error?: string } & SyncOutcome> {
   const supabase = await createClient();
   const dbStage = getStageDB(targetStage);
+  const payload = { stage: dbStage, ...updates };
+
+  const before = await fetchCurrentJob(jobId, supabase);
 
   const { data: updatedJob, error } = await supabase
     .from("jobs")
-    .update({ stage: dbStage, ...updates })
+    .update(payload)
     .eq("id", jobId)
     .select("*, customers(id, name, phone, address, unit_type)")
     .single();
 
   if (error) return { error: error.message };
 
-  await enqueueAndProcess(jobId, updatedJob, supabase);
+  const changes = diffJob(before, payload);
+  const sync = await enqueueAndSync(jobId, updatedJob, supabase, affectsCalendar(changes));
 
   invalidateJobCaches();
-  return { success: true };
+  return { success: true, ...sync };
 }
 
 /**
@@ -94,8 +160,10 @@ export async function updateFields(
   success?: boolean;
   data?: any;
   error?: string;
-}> {
+} & SyncOutcome> {
   const supabase = await createClient();
+
+  const before = await fetchCurrentJob(jobId, supabase);
 
   const { data, error } = await supabase
     .from("jobs")
@@ -106,10 +174,11 @@ export async function updateFields(
 
   if (error) return { error: error.message };
 
-  await enqueueAndProcess(jobId, data, supabase);
+  const changes = diffJob(before, updates);
+  const sync = await enqueueAndSync(jobId, data, supabase, affectsCalendar(changes));
 
   invalidateJobCaches();
-  return { success: true, data };
+  return { success: true, data, ...sync };
 }
 
 /**
@@ -205,7 +274,7 @@ export async function saveJob(
   success?: boolean;
   savedJob?: any;
   error?: string;
-}> {
+} & SyncOutcome> {
   const supabase = await createClient();
 
   try {
@@ -234,6 +303,8 @@ export async function saveJob(
 
     const JOB_SELECT_FULL = "id, stage, service_type, ac_brand, unit_count, visit_date, visit_time, job_date, job_time, second_visit_date, second_visit_time, payment_status, notes, labor_cost, quoted_amount, material_cost, priority, source, service_report_no, internal_notes, quoted_date, expiry_date, status, loss_reason, closed_at, created_at, deposit_amount, deposit_collected, cv_redeemed, cv_amount, final_payment_collected, quotation_breakdown, quotation_materials, quotation_warranty, engineer_name, visit_event_id, job_event_id, second_visit_event_id, customer_id, created_by, assigned_to, customers(id, name, phone, address, unit_type)";
 
+    let syncCalendar: boolean;
+
     if (!payload.id) {
       const { data, error: insertError } = await supabase
         .from("jobs")
@@ -242,8 +313,11 @@ export async function saveJob(
         .single();
       if (insertError) return { error: insertError.message };
       fullJob = data;
+      // A brand new job needs a calendar event only if it's actually scheduled.
+      syncCalendar = hasAnyScheduledDate(fullJob);
     } else {
       const { id, ...updatePayload } = payload;
+      const before = await fetchCurrentJob(id, supabase);
       const { data, error: updateError } = await supabase
         .from("jobs")
         .update(updatePayload)
@@ -252,12 +326,13 @@ export async function saveJob(
         .single();
       if (updateError) return { error: updateError.message };
       fullJob = data;
+      syncCalendar = affectsCalendar(diffJob(before, updatePayload));
     }
 
-    await enqueueAndProcess(fullJob.id, fullJob, supabase);
+    const sync = await enqueueAndSync(fullJob.id, fullJob, supabase, syncCalendar);
 
     invalidateJobCaches();
-    return { success: true, savedJob: fullJob };
+    return { success: true, savedJob: fullJob, ...sync };
   } catch (err: any) {
     return { error: err.message };
   }

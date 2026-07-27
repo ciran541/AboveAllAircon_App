@@ -184,6 +184,14 @@ export default function JobsClient({
       if (result.error) {
         alert("Error updating job: " + result.error);
         router.refresh(); // rollback on error
+      } else if (result.calendarError) {
+        // Stage moved successfully but its calendar event didn't — surface it
+        // here rather than leaving the job silently off the calendar.
+        alert(
+          "Job updated, but its Google Calendar event failed to sync:\n\n" +
+            result.calendarError +
+            "\n\nOpen the job to retry."
+        );
       }
       setActionLoading(false);
     });
@@ -297,18 +305,23 @@ export default function JobsClient({
 
   const confirmDeleteJob = async () => {
     if (!jobToDelete) return;
-    setDeleteLoading(true);
+    const target = jobToDelete;
 
-    const result = await deleteJob(jobToDelete.id);
-
-    if (result.error) {
-      alert("Error deleting job: " + result.error);
-    } else {
-      setJobs((prev) => prev.filter((j) => j.id !== jobToDelete.id));
-    }
-    setDeleteLoading(false);
+    // Optimistic: drop the card and close the modal immediately, then delete
+    // in the background. Server returns as soon as the DB row is gone
+    // (calendar cleanup is deferred via after()), so this feels instant.
+    setJobs((prev) => prev.filter((j) => j.id !== target.id));
     setShowDeleteModal(false);
     setJobToDelete(null);
+    setDeleteLoading(false);
+
+    startTransition(async () => {
+      const result = await deleteJob(target.id);
+      if (result.error) {
+        alert("Error deleting job: " + result.error);
+        router.refresh(); // rollback — restore true server state
+      }
+    });
   };
 
   const hasActiveFilters = !!(searchTerm || serviceTypeFilter !== "All" || stageFilter !== "All" || sourceFilter !== "All" || dateFrom || dateTo);

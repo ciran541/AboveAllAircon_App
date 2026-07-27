@@ -165,6 +165,47 @@ export async function processJobQueue(jobId: string): Promise<void> {
 }
 
 /**
+ * Claims this job's due rows, processes the calendar one inline and returns
+ * its outcome, and hands back the remaining work (Sheets / Meta-lead) as a
+ * promise for the caller to run in the background.
+ *
+ * The split exists so a save that changed a date can wait for *calendar*
+ * confirmation — the thing the user actually cares about — without also
+ * waiting on an Apps Script webhook that nobody needs synchronously.
+ */
+export async function syncCalendarNow(jobId: string): Promise<{
+  calendarError?: string;
+  background: Promise<unknown>;
+}> {
+  const admin = createAdminClient();
+  const { data: claimed, error } = await admin.rpc("claim_sync_queue_batch", {
+    p_limit: 10,
+    p_stale_after: "10 minutes",
+    p_job_id: jobId,
+  });
+  if (error) return { background: Promise.resolve() };
+
+  const rows = (claimed ?? []) as SyncQueueRow[];
+  const calendarRow = rows.find((r) => r.integration === "calendar");
+  const rest = rows.filter((r) => r.integration !== "calendar");
+
+  // Claimed rows must be processed or they sit in 'processing' until they go
+  // stale, so the non-calendar ones are handed back rather than dropped.
+  const background = Promise.allSettled(rest.map((r) => processQueueRow(admin, r)));
+
+  if (!calendarRow) return { background };
+
+  await processQueueRow(admin, calendarRow);
+  const { data: finalRow } = await admin
+    .from("sync_queue")
+    .select("last_error")
+    .eq("id", calendarRow.id)
+    .maybeSingle();
+
+  return { calendarError: finalRow?.last_error ?? undefined, background };
+}
+
+/**
  * Proactively checks every active job's calendar event(s) for drift — most
  * notably a manual delete in Calendar, which soft-deletes to "cancelled"
  * rather than purging, so our own PATCH-based sync would otherwise report

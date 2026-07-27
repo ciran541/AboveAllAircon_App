@@ -35,6 +35,7 @@ export default function JobDetailClient({
   const [loading, setLoading] = useState(false);
   const [syncIssues, setSyncIssues] = useState(initialSyncIssues);
   const [retryingSync, setRetryingSync] = useState<string | null>(null);
+  const [calendarPending, setCalendarPending] = useState(false);
   const [showCRMPanel, setShowCRMPanel] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [editedNotes, setEditedNotes] = useState(initialJob.notes || "");
@@ -87,6 +88,26 @@ export default function JobDetailClient({
     return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
   };
 
+  /**
+   * Folds the calendar result a save just returned into the same banner that
+   * shows server-detected issues, so there's one place to look rather than a
+   * transient alert the user can miss. A clean result also clears any stale
+   * calendar banner, since the sync we just ran is the freshest truth.
+   */
+  const applySyncOutcome = (result: { calendarError?: string; calendarPending?: boolean }) => {
+    setCalendarPending(Boolean(result.calendarPending));
+    setSyncIssues((prev) => {
+      const others = prev.filter((i) => i.integration !== "calendar");
+      if (result.calendarError) {
+        return [
+          ...others,
+          { id: "live-calendar", integration: "calendar", status: "failed", last_error: result.calendarError },
+        ];
+      }
+      return result.calendarPending ? prev : others;
+    });
+  };
+
   // ── Sync retry (Calendar / Sheets / Meta-lead) ──────────────
   const handleRetrySync = async (integration: string) => {
     setRetryingSync(integration);
@@ -119,6 +140,7 @@ export default function JobDetailClient({
       setJob(oldJob); // Rollback
     } else if (result.data) {
       setJob((prev: any) => ({ ...prev, ...result.data }));
+      applySyncOutcome(result);
     }
     setLoading(false);
   };
@@ -148,6 +170,8 @@ export default function JobDetailClient({
       setJob(oldJob); // Rollback
       setShowWhatsAppTemplate(false);
       setShowQuotationModal(true); // Re-open for the user
+    } else {
+      applySyncOutcome(result);
     }
     setLoading(false);
   };
@@ -264,6 +288,7 @@ export default function JobDetailClient({
       const newStaff = staffProfiles.find((s: any) => s.id === result.data.assigned_to);
       setJob({ ...job, ...result.data, assigned_staff: newStaff || null });
       setIsEditing(false);
+      applySyncOutcome(result);
     } else {
       alert(result.error);
     }
@@ -365,6 +390,17 @@ export default function JobDetailClient({
             </button>
           </div>
         ))}
+
+        {/* Calendar sync outlasted the inline wait — it's still running in the
+            background, so say so rather than implying silent success. */}
+        {calendarPending && (
+          <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 12, padding: "12px 20px", display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 18, lineHeight: 1 }}>⏳</span>
+            <div style={{ fontSize: 13, color: "#92400e" }}>
+              <strong>Google Calendar is still syncing.</strong> It's running in the background — refresh in a moment to confirm.
+            </div>
+          </div>
+        )}
 
         {/* ── STAGE TIMELINE (read-only) ── */}
         <div style={{ background: "#fff", padding: "28px 32px", borderRadius: 16, border: "1px solid #e2e8f0" }}>
