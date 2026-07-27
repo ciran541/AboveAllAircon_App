@@ -26,6 +26,7 @@ type UpsertParams = {
 type CalendarEventPayload = {
   summary: string;
   description: string;
+  status: "confirmed";
   start: { dateTime: string; timeZone: string };
   end: { dateTime: string; timeZone: string };
 };
@@ -162,6 +163,14 @@ function buildEventPayload(params: UpsertParams): CalendarEventPayload {
       `Address: ${customerAddress}`,
       `Notes: ${jobNotes}`,
     ].join("\n"),
+    // Always force the event back to confirmed. If someone manually deletes
+    // an event directly in Calendar, Google soft-deletes it (status becomes
+    // "cancelled", invisible in the UI) rather than purging it — a later PATCH
+    // to that same event id otherwise returns 200 OK without ever un-cancelling
+    // it, so our own sync would report "success" while the event stays hidden.
+    // Real deletions already go through deleteCalendarEvent() (a hard DELETE),
+    // so any event still being upserted here should always end up confirmed.
+    status: "confirmed",
     start: { dateTime: start, timeZone: timezone },
     end: { dateTime: end, timeZone: timezone },
   };
