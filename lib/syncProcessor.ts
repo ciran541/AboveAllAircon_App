@@ -16,7 +16,12 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { batchSyncCalendarEvents, listCalendarEventStatuses, logCalendarEvent } from "@/lib/googleCalendar";
+import {
+  batchSyncCalendarEvents,
+  listCalendarEventStatuses,
+  getCalendarEventStatus,
+  logCalendarEvent,
+} from "@/lib/googleCalendar";
 import { logJobToSheets, logMetaLeadToSheets } from "@/lib/sheetsBackup";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -90,8 +95,17 @@ async function syncCalendarForJob(admin: AdminClient, jobId: string): Promise<vo
   if (errors.length > 0) throw new Error(errors.join(" | "));
 }
 
-/** Processes a single claimed sync_queue row and writes back its outcome. */
-export async function processQueueRow(admin: AdminClient, row: SyncQueueRow): Promise<void> {
+/**
+ * Processes a single claimed sync_queue row and writes back its outcome.
+ * Completion goes through the complete_sync_row RPC rather than a plain
+ * update: it also detects work enqueued while this run was in flight and
+ * re-queues instead of falsely marking success (see migration
+ * 20260729000000_fix_sync_queue_lost_updates.sql).
+ */
+export async function processQueueRow(
+  admin: AdminClient,
+  row: SyncQueueRow
+): Promise<{ requeuedForNewerData: boolean }> {
   try {
     if (row.integration === "calendar") {
       await syncCalendarForJob(admin, row.job_id);
@@ -103,24 +117,20 @@ export async function processQueueRow(admin: AdminClient, row: SyncQueueRow): Pr
       await logMetaLeadToSheets(job);
     }
 
-    await admin
-      .from("sync_queue")
-      .update({ status: "success", last_error: null, updated_at: new Date().toISOString() })
-      .eq("id", row.id);
+    const { data: status } = await admin.rpc("complete_sync_row", { p_id: row.id });
+    // The run itself succeeded but the RPC kept the row pending — that means a
+    // newer save landed mid-flight and still needs syncing.
+    return { requeuedForNewerData: status === "pending" };
   } catch (err: any) {
     const message = err?.message ?? String(err);
-    const outOfAttempts = row.attempts >= row.max_attempts;
-    await admin
-      .from("sync_queue")
-      .update({
-        status: outOfAttempts ? "failed" : "pending",
-        last_error: message,
-        next_attempt_at: outOfAttempts
-          ? undefined
-          : new Date(Date.now() + backoffMinutes(row.attempts) * 60_000).toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", row.id);
+    await admin.rpc("complete_sync_row", {
+      p_id: row.id,
+      p_error: message,
+      p_backoff_minutes: backoffMinutes(row.attempts),
+      p_out_of_attempts: row.attempts >= row.max_attempts,
+    });
+    // Failures wait out their backoff; re-running now would just burn attempts.
+    return { requeuedForNewerData: false };
   }
 }
 
@@ -131,13 +141,27 @@ export async function processQueueRow(admin: AdminClient, row: SyncQueueRow): Pr
  */
 export async function processJobQueue(jobId: string): Promise<void> {
   const admin = createAdminClient();
-  const { data: claimed, error } = await admin.rpc("claim_sync_queue_batch", {
-    p_limit: 10,
-    p_stale_after: "10 minutes",
-    p_job_id: jobId,
-  });
-  if (error || !claimed) return;
-  await Promise.allSettled((claimed as SyncQueueRow[]).map((row) => processQueueRow(admin, row)));
+
+  // Loop so that a save landing mid-flight gets synced in this same pass
+  // instead of waiting for the next save or the daily cron. Bounded because
+  // a steady stream of edits could otherwise keep this alive indefinitely —
+  // whatever is left over is picked up by the next trigger either way.
+  for (let pass = 0; pass < 3; pass++) {
+    const { data: claimed, error } = await admin.rpc("claim_sync_queue_batch", {
+      p_limit: 10,
+      p_stale_after: "10 minutes",
+      p_job_id: jobId,
+    });
+    if (error || !claimed || (claimed as SyncQueueRow[]).length === 0) return;
+
+    const results = await Promise.allSettled(
+      (claimed as SyncQueueRow[]).map((row) => processQueueRow(admin, row))
+    );
+    const needsAnotherPass = results.some(
+      (r) => r.status === "fulfilled" && r.value.requeuedForNewerData
+    );
+    if (!needsAnotherPass) return;
+  }
 }
 
 /**
@@ -184,9 +208,32 @@ export async function checkCalendarDrift(
     ];
 
     for (const slot of slots) {
-      if (!slot.date || !slot.eventId || slot.date < windowStartDate) continue;
+      // A slot with a date but no event id is the worst case — the job simply
+      // isn't on the calendar at all — so it must be counted as drift, not
+      // skipped. (This is exactly the "job missing from Calendar" complaint.)
+      if (!slot.date || slot.date < windowStartDate) continue;
       checked++;
-      if (statuses.get(slot.eventId) === "cancelled") {
+
+      let drifted = false;
+      if (!slot.eventId) {
+        drifted = true;
+      } else {
+        const listed = statuses.get(slot.eventId);
+        if (listed === "cancelled") {
+          drifted = true;
+        } else if (listed === undefined) {
+          // Absent from the listing isn't proof of health: it may have been
+          // hard-purged, or moved outside the listing window. Confirm directly
+          // before deciding. Expected to be rare, so the extra call is cheap.
+          try {
+            drifted = (await getCalendarEventStatus(slot.eventId)) !== "confirmed";
+          } catch {
+            drifted = false; // transient API error — next run re-checks
+          }
+        }
+      }
+
+      if (drifted) {
         driftFound++;
         await logCalendarEvent({
           jobId: job.id,
@@ -205,12 +252,18 @@ export async function checkCalendarDrift(
   // Google's short-window rate limit (a single job's own upserts already run
   // in parallel via batchSyncCalendarEvents, so this still overlaps some
   // calls, just not across the whole drifted set simultaneously).
+  //
+  // Heal *through the queue* rather than calling syncCalendarForJob directly,
+  // so the sync_queue row reflects the outcome. Healing directly left rows
+  // stuck showing a stale last_error long after the calendar was repaired,
+  // which is exactly the "banner says broken but it isn't" confusion.
   for (const jobId of jobsToHeal) {
     try {
-      await syncCalendarForJob(admin, jobId);
+      await admin.rpc("enqueue_sync", { p_job_id: jobId, p_integration: "calendar" });
+      await processJobQueue(jobId);
     } catch {
-      // Logged by syncCalendarForJob's own upsert calls; next day's drift
-      // check (or the job's next edit) will pick it up again.
+      // Individual failures are already recorded on the queue row and in
+      // calendar_event_log; the next run picks them up again.
     }
   }
 

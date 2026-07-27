@@ -33,11 +33,14 @@ export default async function JobDetailPage({ params }: { params: { id: string }
 
   const staffProfilesPromise = getCachedStaffProfiles();
 
+  // Surface anything currently carrying an error, not just rows that have
+  // exhausted all 5 attempts — attempts only increment on a save or the daily
+  // cron, so waiting for status='failed' hid real failures for days.
   const syncIssuesPromise = adminClient
     .from('sync_queue')
     .select('id, integration, status, last_error')
     .eq('job_id', id)
-    .eq('status', 'failed');
+    .not('last_error', 'is', null);
 
   // 2. Await them all at once (huge latency drop)
   const [

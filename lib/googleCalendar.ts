@@ -63,7 +63,11 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs =
       // healing many jobs at once) would rate-limit and then never retry,
       // silently leaving events unhealed.
       const isRateLimit = /rateLimitExceeded|userRateLimitExceeded|quotaExceeded/i.test(message);
-      const isPermanent = /\b(401|403)\b/.test(message) && !isRateLimit;
+      // __EVENT_GONE__ is our own signal that the target event no longer exists;
+      // retrying the same PATCH can only fail identically, so bail out at once
+      // and let the caller recreate.
+      const isPermanent =
+        message.startsWith("__EVENT_GONE__") || (/\b(401|403)\b/.test(message) && !isRateLimit);
       if (isPermanent || attempt === maxAttempts) throw err;
       const delay = isRateLimit ? baseDelayMs * attempt * 2 : baseDelayMs * attempt;
       await new Promise(r => setTimeout(r, delay));
@@ -321,12 +325,15 @@ export async function getCalendarEventStatus(eventId: string): Promise<string | 
 async function _upsertWithToken(
   token: string,
   calendarId: string,
-  params: UpsertParams
+  params: UpsertParams,
+  /** Set when retrying as a create after the stored event id turned out to be gone. */
+  forceCreate = false
 ): Promise<{ eventId: string }> {
   const payload = buildEventPayload(params);
-  const method = params.existingEventId ? "PATCH" : "POST";
-  const eventPath = params.existingEventId
-    ? `/calendars/${calendarId}/events/${encodeURIComponent(params.existingEventId)}`
+  const useExisting = Boolean(params.existingEventId) && !forceCreate;
+  const method = useExisting ? "PATCH" : "POST";
+  const eventPath = useExisting
+    ? `/calendars/${calendarId}/events/${encodeURIComponent(params.existingEventId as string)}`
     : `/calendars/${calendarId}/events`;
 
   // Only set colorId on create. PATCH is a partial update — omitting a field
@@ -353,6 +360,12 @@ async function _upsertWithToken(
 
       if (!response.ok) {
         const errorText = await response.text();
+        // A stored event id that Google no longer knows about (hard-deleted and
+        // purged) would otherwise fail this PATCH identically forever, leaving
+        // the job permanently off the calendar. Signal the caller to recreate.
+        if (method === "PATCH" && (response.status === 404 || response.status === 410)) {
+          throw new Error(`__EVENT_GONE__ ${response.status}`);
+        }
         throw new Error(`Google Calendar upsert failed (${params.type}): ${response.status} ${errorText}`);
       }
 
@@ -370,13 +383,30 @@ async function _upsertWithToken(
     });
     return result;
   } catch (err: any) {
+    const message = err?.message ?? String(err);
+
+    // Stored event id is gone from Google — recreate rather than failing this
+    // job's calendar sync forever. Logged as its own entry so the recreate is
+    // visible in the audit trail instead of looking like a normal create.
+    if (message.startsWith("__EVENT_GONE__") && !forceCreate) {
+      await logCalendarEvent({
+        jobId: params.job.id,
+        eventType: params.type,
+        operation: "drift_detected",
+        eventId: params.existingEventId ?? null,
+        success: true,
+        error: `Stored event no longer exists on Google (${message.replace("__EVENT_GONE__ ", "")}); recreating.`,
+      });
+      return _upsertWithToken(token, calendarId, params, true);
+    }
+
     await logCalendarEvent({
       jobId: params.job.id,
       eventType: params.type,
       operation,
       eventId: params.existingEventId ?? null,
       success: false,
-      error: err?.message ?? String(err),
+      error: message,
     });
     throw err;
   }
