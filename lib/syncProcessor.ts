@@ -16,7 +16,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { batchSyncCalendarEvents, getCalendarEventStatus, logCalendarEvent } from "@/lib/googleCalendar";
+import { batchSyncCalendarEvents, listCalendarEventStatuses, logCalendarEvent } from "@/lib/googleCalendar";
 import { logJobToSheets, logMetaLeadToSheets } from "@/lib/sheetsBackup";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -153,10 +153,24 @@ export async function processJobQueue(jobId: string): Promise<void> {
 export async function checkCalendarDrift(
   admin: AdminClient
 ): Promise<{ checked: number; driftFound: number }> {
+  // Only look at jobs scheduled from ~60 days ago onward. Drift on long-past
+  // jobs has no operational value, and bounding the window keeps both the
+  // Calendar listing and this query small enough to finish well inside the
+  // route's maxDuration.
+  const windowStart = new Date();
+  windowStart.setDate(windowStart.getDate() - 60);
+  const windowStartDate = windowStart.toISOString().slice(0, 10);
+
   const { data: jobs } = await admin
     .from("jobs")
     .select("id, visit_date, visit_event_id, job_date, job_event_id, second_visit_date, second_visit_event_id")
-    .or("visit_event_id.not.is.null,job_event_id.not.is.null,second_visit_event_id.not.is.null");
+    .or(
+      `visit_date.gte.${windowStartDate},job_date.gte.${windowStartDate},second_visit_date.gte.${windowStartDate}`
+    );
+
+  // One bulk listing instead of a request per event — see
+  // listCalendarEventStatuses for why (this used to take minutes and rate-limit).
+  const statuses = await listCalendarEventStatuses(windowStart.toISOString());
 
   let checked = 0;
   let driftFound = 0;
@@ -170,15 +184,9 @@ export async function checkCalendarDrift(
     ];
 
     for (const slot of slots) {
-      if (!slot.date || !slot.eventId) continue;
+      if (!slot.date || !slot.eventId || slot.date < windowStartDate) continue;
       checked++;
-      let status: string | null;
-      try {
-        status = await getCalendarEventStatus(slot.eventId);
-      } catch {
-        continue; // transient API error — next day's check will retry
-      }
-      if (status === "cancelled") {
+      if (statuses.get(slot.eventId) === "cancelled") {
         driftFound++;
         await logCalendarEvent({
           jobId: job.id,
@@ -192,9 +200,19 @@ export async function checkCalendarDrift(
     }
   }
 
-  // syncCalendarForJob re-confirms every active slot for the job in one go,
-  // which forces status back to "confirmed" and logs its own outcome.
-  await Promise.allSettled(Array.from(jobsToHeal).map((jobId) => syncCalendarForJob(admin, jobId)));
+  // Heal one job at a time, not all in parallel — a burst of concurrent
+  // Calendar API calls across many drifted jobs at once is exactly what trips
+  // Google's short-window rate limit (a single job's own upserts already run
+  // in parallel via batchSyncCalendarEvents, so this still overlaps some
+  // calls, just not across the whole drifted set simultaneously).
+  for (const jobId of jobsToHeal) {
+    try {
+      await syncCalendarForJob(admin, jobId);
+    } catch {
+      // Logged by syncCalendarForJob's own upsert calls; next day's drift
+      // check (or the job's next edit) will pick it up again.
+    }
+  }
 
   return { checked, driftFound };
 }

@@ -55,9 +55,18 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3, baseDelayMs =
     try {
       return await fn();
     } catch (err: any) {
-      const isPermanent = /\b(401|403)\b/.test(err?.message ?? "");
+      const message = err?.message ?? "";
+      // Google signals rate limiting as HTTP 403 with one of these reasons —
+      // that's a transient, retry-worthy condition, not the same as a real
+      // 401/403 auth/permission failure. Treating all 403s as permanent (as
+      // this used to) meant a burst of concurrent calls (e.g. the drift-check
+      // healing many jobs at once) would rate-limit and then never retry,
+      // silently leaving events unhealed.
+      const isRateLimit = /rateLimitExceeded|userRateLimitExceeded|quotaExceeded/i.test(message);
+      const isPermanent = /\b(401|403)\b/.test(message) && !isRateLimit;
       if (isPermanent || attempt === maxAttempts) throw err;
-      await new Promise(r => setTimeout(r, baseDelayMs * attempt));
+      const delay = isRateLimit ? baseDelayMs * attempt * 2 : baseDelayMs * attempt;
+      await new Promise(r => setTimeout(r, delay));
     }
   }
   throw new Error("unreachable");
@@ -238,10 +247,54 @@ export async function deleteCalendarEvent(eventId: string, meta?: DeleteMeta): P
 }
 
 /**
+ * Bulk-fetches the status of every event on the calendar from `timeMinIso`
+ * onward, as a Map of eventId -> status ("confirmed" | "tentative" |
+ * "cancelled"). Used by the daily drift check: fetching a few hundred event
+ * statuses one-by-one took minutes and blew past the route's maxDuration
+ * (and tripped Google's rate limiter), whereas listing them is 1-2 calls.
+ * `showDeleted` is what makes soft-deleted ("cancelled") events visible here.
+ */
+export async function listCalendarEventStatuses(timeMinIso: string): Promise<Map<string, string>> {
+  const calendarId = encodeURIComponent(getRequiredEnv("GOOGLE_CALENDAR_ID"));
+  const token = await getAccessToken();
+  const statuses = new Map<string, string>();
+  let pageToken: string | undefined;
+
+  do {
+    const search = new URLSearchParams({
+      showDeleted: "true",
+      maxResults: "2500",
+      timeMin: timeMinIso,
+      fields: "nextPageToken,items(id,status)",
+    });
+    if (pageToken) search.set("pageToken", pageToken);
+
+    const page: { items?: { id?: string; status?: string }[]; nextPageToken?: string } =
+      await withRetry(async () => {
+        const response = await fetch(
+          `${CALENDAR_API_BASE}/calendars/${calendarId}/events?${search.toString()}`,
+          { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+        );
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Failed to list calendar events: ${response.status} ${errorText}`);
+        }
+        return response.json();
+      });
+
+    for (const item of page.items ?? []) {
+      if (item.id && item.status) statuses.set(item.id, item.status);
+    }
+    pageToken = page.nextPageToken;
+  } while (pageToken);
+
+  return statuses;
+}
+
+/**
  * Returns the event's current status ("confirmed" | "tentative" | "cancelled"),
- * or null if the event is gone entirely (404/410). Used by the daily drift
- * check to catch events that were manually deleted in Calendar (which
- * soft-deletes to "cancelled" rather than purging) between app-triggered syncs.
+ * or null if the event is gone entirely (404/410). Single-event variant of
+ * listCalendarEventStatuses, for one-off checks.
  */
 export async function getCalendarEventStatus(eventId: string): Promise<string | null> {
   if (!eventId) return null;
