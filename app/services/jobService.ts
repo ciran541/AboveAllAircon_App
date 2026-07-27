@@ -38,9 +38,6 @@ type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
 
 // ── Internal sync enqueue ─────────────────────────────────────────────────────
 
-/** How long a save will wait for calendar confirmation before backgrounding it. */
-const CALENDAR_CONFIRM_TIMEOUT_MS = 4000;
-
 /** The columns whose presence means this job belongs on the calendar at all. */
 const DATE_FIELDS = CALENDAR_JOB_FIELDS.filter((f) => f.endsWith("_date"));
 
@@ -54,18 +51,21 @@ function hasAnyScheduledDate(job: any): boolean {
 export type SyncOutcome = {
   /** Calendar sync ran and failed — surfaced to the user immediately. */
   calendarError?: string;
-  /** Calendar sync is taking longer than the inline wait; still running. */
+  /** Calendar sync is still running in the background; result not known yet. */
   calendarPending?: boolean;
 };
 
 /**
- * Queues the integrations this save actually needs, then — when the calendar
- * is among them — waits briefly for the calendar result so the person who
- * made the change is told right away if it failed.
+ * Queues the integrations this save actually needs and returns immediately.
  *
- * `syncCalendar` is decided by a real field diff. Previously every save
- * re-pushed all three calendar events, which meant editing the notes on a
- * completed job generated calendar traffic and log noise for nothing.
+ * Saves used to block on the Calendar round trip for confirmation, which cost
+ * seconds per save (a Calendar write alone is ~2s) and made the app feel slow.
+ * The confirmation is no longer worth blocking for: the client polls the
+ * result a moment later via getJobSyncStatus, and a failure is durably visible
+ * on the job banner, the Sync Health page and the daily email regardless.
+ *
+ * `syncCalendar` is decided by a real field diff, so most saves don't touch
+ * Google at all — editing notes on a completed job now queues nothing.
  */
 async function enqueueAndSync(
   jobId: string,
@@ -77,35 +77,38 @@ async function enqueueAndSync(
   if (job?.source === "Meta") integrations.push("meta_lead");
   if (syncCalendar) integrations.push("calendar");
 
-  for (const integration of integrations) {
-    await supabase.rpc("enqueue_sync", { p_job_id: jobId, p_integration: integration });
-  }
+  // In parallel — these were sequential, costing a full round trip each.
+  await Promise.all(
+    integrations.map((integration) =>
+      supabase.rpc("enqueue_sync", { p_job_id: jobId, p_integration: integration })
+    )
+  );
 
-  // Nothing calendar-related changed — everything can finish in the background.
-  if (!syncCalendar) {
-    after(() => processJobQueue(jobId));
-    return {};
-  }
+  after(() => processJobQueue(jobId));
 
-  const run = syncCalendarNow(jobId);
+  return syncCalendar ? { calendarPending: true } : {};
+}
 
-  // Always hand the same promise to after(), so hitting the timeout degrades
-  // to background completion instead of abandoning an in-flight request.
-  after(async () => {
-    const { background } = await run.catch(() => ({ background: Promise.resolve() }));
-    await background.catch(() => {});
-  });
+/**
+ * Current sync state for a job, so the client can pick up the outcome shortly
+ * after a save without having made the save itself wait for it.
+ */
+export async function getJobSyncStatus(
+  jobId: string
+): Promise<{ pending: boolean; calendarError?: string }> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("sync_queue")
+    .select("integration, status, last_error")
+    .eq("job_id", jobId)
+    .eq("integration", "calendar")
+    .maybeSingle();
 
-  const timedOut = Symbol("timeout");
-  const raced = await Promise.race([
-    run,
-    new Promise<typeof timedOut>((resolve) =>
-      setTimeout(() => resolve(timedOut), CALENDAR_CONFIRM_TIMEOUT_MS)
-    ),
-  ]);
-
-  if (raced === timedOut) return { calendarPending: true };
-  return raced.calendarError ? { calendarError: raced.calendarError } : {};
+  if (!data) return { pending: false };
+  return {
+    pending: data.status === "pending" || data.status === "processing",
+    calendarError: data.last_error ?? undefined,
+  };
 }
 
 /** Reads the row as it stands so a save can be diffed against it. */
@@ -123,27 +126,33 @@ async function fetchCurrentJob(jobId: string, supabase: SupabaseClient) {
  * skipped, which keeps the debounced quotation autosave from filling the
  * timeline with empty entries.
  */
-async function recordJobActivity(
+function recordJobActivity(
   jobId: string,
   action: "created" | "updated" | "deleted",
   changes: FieldChange[],
   supabase: SupabaseClient,
   /** Human-readable snapshot — the only way to identify a deleted job later. */
   jobLabel?: string | null
-): Promise<void> {
+): void {
   if (action === "updated" && changes.length === 0) return;
-  try {
-    const { data: auth } = await supabase.auth.getUser();
-    await createAdminClient().from("job_activity").insert({
-      job_id: jobId,
-      actor_id: auth?.user?.id ?? null,
-      action,
-      changes,
-      job_label: jobLabel ?? null,
-    });
-  } catch (err) {
-    console.error("[jobActivity] failed to record activity:", err);
-  }
+
+  // Written after the response is sent. Resolving the actor alone costs a
+  // round trip to the auth server, and nobody should wait on writing a log
+  // entry. after() keeps it alive on serverless, so it still gets recorded.
+  after(async () => {
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      await createAdminClient().from("job_activity").insert({
+        job_id: jobId,
+        actor_id: auth?.user?.id ?? null,
+        action,
+        changes,
+        job_label: jobLabel ?? null,
+      });
+    } catch (err) {
+      console.error("[jobActivity] failed to record activity:", err);
+    }
+  });
 }
 
 // ── Exported service functions ────────────────────────────────────────────────
@@ -174,7 +183,7 @@ export async function transitionStage(
   if (error) return { error: error.message };
 
   const changes = diffJob(before, payload);
-  await recordJobActivity(jobId, "updated", changes, supabase);
+  recordJobActivity(jobId, "updated", changes, supabase);
   const sync = await enqueueAndSync(jobId, updatedJob, supabase, affectsCalendar(changes));
 
   invalidateJobCaches();
@@ -208,7 +217,7 @@ export async function updateFields(
   if (error) return { error: error.message };
 
   const changes = diffJob(before, updates);
-  await recordJobActivity(jobId, "updated", changes, supabase);
+  recordJobActivity(jobId, "updated", changes, supabase);
   const sync = await enqueueAndSync(jobId, data, supabase, affectsCalendar(changes));
 
   invalidateJobCaches();
@@ -343,7 +352,7 @@ export async function deleteJob(
   // Recorded after the delete succeeds, so the log never claims a deletion
   // that didn't happen. job_activity intentionally has no foreign key to jobs
   // (see migration 20260801000000) so this record outlives the job.
-  await recordJobActivity(
+  recordJobActivity(
     jobId,
     "deleted",
     [
@@ -431,7 +440,7 @@ export async function saveJob(
       fullJob = data;
       // A brand new job needs a calendar event only if it's actually scheduled.
       syncCalendar = hasAnyScheduledDate(fullJob);
-      await recordJobActivity(fullJob.id, "created", [], supabase);
+      recordJobActivity(fullJob.id, "created", [], supabase);
     } else {
       const { id, ...updatePayload } = payload;
       const before = await fetchCurrentJob(id, supabase);
@@ -444,7 +453,7 @@ export async function saveJob(
       if (updateError) return { error: updateError.message };
       fullJob = data;
       const changes = diffJob(before, updatePayload);
-      await recordJobActivity(id, "updated", changes, supabase);
+      recordJobActivity(id, "updated", changes, supabase);
       syncCalendar = affectsCalendar(changes);
     }
 

@@ -132,16 +132,9 @@ export default function JobModal({
     if (response.error) {
       setError(response.error);
     } else if (response.savedJob) {
-      // The job saved fine, so don't block the modal — but a failed calendar
-      // sync must not pass silently, since that's how a job ends up scheduled
-      // in the app but invisible on the calendar.
-      if (response.calendarError) {
-        alert(
-          "Job saved, but its Google Calendar event failed to sync:\n\n" +
-            response.calendarError +
-            "\n\nOpen the job to retry."
-        );
-      }
+      // Calendar sync runs in the background so saving stays fast. A failure
+      // shows on the job's own banner and the Sync Health page rather than
+      // holding this modal open waiting on Google.
       onSave(response.savedJob);
     }
 

@@ -151,7 +151,17 @@ function createSignedJwt(clientEmail: string, privateKey: string): string {
   return `${content}.${signature}`;
 }
 
+/**
+ * Google's tokens last an hour, but this used to fetch a fresh one on every
+ * single call — ~400ms of pure waste on every save. Cached per warm instance,
+ * with a safety margin so a token can't expire mid-request.
+ */
+let cachedToken: { value: string; expiresAt: number } | null = null;
+const TOKEN_TTL_MS = 55 * 60_000;
+
 async function getAccessToken(): Promise<string> {
+  if (cachedToken && cachedToken.expiresAt > Date.now()) return cachedToken.value;
+
   const clientEmail = getRequiredEnv("GOOGLE_SERVICE_ACCOUNT_EMAIL");
   const privateKey = getRequiredEnv("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY").replace(/\\n/g, "\n");
   const assertion = createSignedJwt(clientEmail, privateKey);
@@ -176,6 +186,7 @@ async function getAccessToken(): Promise<string> {
 
     const tokenData = (await tokenResponse.json()) as { access_token?: string };
     if (!tokenData.access_token) throw new Error("Google token response did not include access_token.");
+    cachedToken = { value: tokenData.access_token, expiresAt: Date.now() + TOKEN_TTL_MS };
     return tokenData.access_token;
   });
 }

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import InvoicePreviewModal from "@/components/InvoicePreviewModal";
 import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal, CompleteJobModal } from "@/components/StageModals";
-import { updateJobFields, deleteJob as deleteJobAction, updateJobStage, retrySync } from "@/app/actions/jobActions";
+import { updateJobFields, deleteJob as deleteJobAction, updateJobStage, retrySync, getJobSyncStatus } from "@/app/actions/jobActions";
 import { logJobMaterial, removeJobMaterial } from "@/app/actions/inventoryActions";
 import { updateCustomerDetails } from "@/app/actions/customerActions";
 import { JOB_STAGES as STAGES, getStageDisplay, getStageDB, UNIT_TYPES, LEAD_SOURCES, getSourceDisplay } from "@/lib/constants";
@@ -200,6 +200,27 @@ export default function JobDetailClient({
       }
       return result.calendarPending ? prev : others;
     });
+
+    // The save no longer waits on Google — that cost seconds per save. Check
+    // back once the sync has had time to land so the user still finds out,
+    // just without the UI having been held hostage to a network round trip.
+    if (result.calendarPending) {
+      window.setTimeout(async () => {
+        try {
+          const status = await getJobSyncStatus(job.id);
+          if (status.pending) return; // still going; the banner on next load will tell
+          setCalendarPending(false);
+          setSyncIssues((prev) => {
+            const others = prev.filter((i) => i.integration !== "calendar");
+            return status.calendarError
+              ? [...others, { id: "live-calendar", integration: "calendar", status: "failed", last_error: status.calendarError }]
+              : others;
+          });
+        } catch {
+          setCalendarPending(false);
+        }
+      }, 3500);
+    }
   };
 
   // ── Sync retry (Calendar / Sheets / Meta-lead) ──────────────

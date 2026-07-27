@@ -184,14 +184,6 @@ export default function JobsClient({
       if (result.error) {
         alert("Error updating job: " + result.error);
         router.refresh(); // rollback on error
-      } else if (result.calendarError) {
-        // Stage moved successfully but its calendar event didn't — surface it
-        // here rather than leaving the job silently off the calendar.
-        alert(
-          "Job updated, but its Google Calendar event failed to sync:\n\n" +
-            result.calendarError +
-            "\n\nOpen the job to retry."
-        );
       }
       setActionLoading(false);
     });

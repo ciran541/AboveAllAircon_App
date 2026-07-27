@@ -50,6 +50,14 @@ export async function saveJob(dataToSave: any, newCustomerData?: any) {
 }
 
 /**
+ * Current calendar sync state for a job. Lets the client confirm the outcome
+ * shortly after a save without the save itself having waited for Google.
+ */
+export async function getJobSyncStatus(jobId: string) {
+  return JobService.getJobSyncStatus(jobId);
+}
+
+/**
  * Resolves a reconciliation conflict where Google Calendar's start time
  * differs from the app's — someone rescheduled the event directly in
  * Calendar. Delegates entirely to JobService.
