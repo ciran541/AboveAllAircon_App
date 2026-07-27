@@ -250,18 +250,27 @@ export async function deleteCalendarEvent(eventId: string, meta?: DeleteMeta): P
   await _deleteWithToken(token, calendarId, eventId, meta);
 }
 
+export type ListedEvent = {
+  status: string;
+  /** RFC3339 instant for a timed event. */
+  startDateTime?: string;
+  /** YYYY-MM-DD for an all-day event. */
+  startDate?: string;
+};
+
 /**
- * Bulk-fetches the status of every event on the calendar from `timeMinIso`
- * onward, as a Map of eventId -> status ("confirmed" | "tentative" |
- * "cancelled"). Used by the daily drift check: fetching a few hundred event
- * statuses one-by-one took minutes and blew past the route's maxDuration
- * (and tripped Google's rate limiter), whereas listing them is 1-2 calls.
- * `showDeleted` is what makes soft-deleted ("cancelled") events visible here.
+ * Bulk-fetches every event on the calendar from `timeMinIso` onward, keyed by
+ * event id. Used by reconciliation: checking a few hundred events one-by-one
+ * took minutes, blew past the route's maxDuration and tripped Google's rate
+ * limiter, whereas listing them is 1-2 calls.
+ *
+ * `showDeleted` is what makes soft-deleted ("cancelled") events visible —
+ * without it a manually-deleted event is indistinguishable from a healthy one.
  */
-export async function listCalendarEventStatuses(timeMinIso: string): Promise<Map<string, string>> {
+export async function listCalendarEvents(timeMinIso: string): Promise<Map<string, ListedEvent>> {
   const calendarId = encodeURIComponent(getRequiredEnv("GOOGLE_CALENDAR_ID"));
   const token = await getAccessToken();
-  const statuses = new Map<string, string>();
+  const events = new Map<string, ListedEvent>();
   let pageToken: string | undefined;
 
   do {
@@ -269,30 +278,90 @@ export async function listCalendarEventStatuses(timeMinIso: string): Promise<Map
       showDeleted: "true",
       maxResults: "2500",
       timeMin: timeMinIso,
-      fields: "nextPageToken,items(id,status)",
+      fields: "nextPageToken,items(id,status,start)",
     });
     if (pageToken) search.set("pageToken", pageToken);
 
-    const page: { items?: { id?: string; status?: string }[]; nextPageToken?: string } =
-      await withRetry(async () => {
-        const response = await fetch(
-          `${CALENDAR_API_BASE}/calendars/${calendarId}/events?${search.toString()}`,
-          { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-        );
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to list calendar events: ${response.status} ${errorText}`);
-        }
-        return response.json();
-      });
+    const page: {
+      items?: { id?: string; status?: string; start?: { dateTime?: string; date?: string } }[];
+      nextPageToken?: string;
+    } = await withRetry(async () => {
+      const response = await fetch(
+        `${CALENDAR_API_BASE}/calendars/${calendarId}/events?${search.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+      );
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to list calendar events: ${response.status} ${errorText}`);
+      }
+      return response.json();
+    });
 
     for (const item of page.items ?? []) {
-      if (item.id && item.status) statuses.set(item.id, item.status);
+      if (!item.id || !item.status) continue;
+      events.set(item.id, {
+        status: item.status,
+        startDateTime: item.start?.dateTime,
+        startDate: item.start?.date,
+      });
     }
     pageToken = page.nextPageToken;
   } while (pageToken);
 
-  return statuses;
+  return events;
+}
+
+/** The instant an event for this slot is supposed to start. */
+export function expectedEventStart(date: string, time: string | null): string {
+  return buildStartEnd(date, time).start;
+}
+
+/**
+ * Reads an event's actual start back as a { date, time } pair in the
+ * calendar's own timezone — i.e. what a person sees in Google Calendar,
+ * not the server's locale. Used when accepting a reschedule that was made
+ * directly in Calendar.
+ */
+export async function getCalendarEventStart(
+  eventId: string
+): Promise<{ date: string; time: string | null } | null> {
+  const calendarId = encodeURIComponent(getRequiredEnv("GOOGLE_CALENDAR_ID"));
+  const token = await getAccessToken();
+
+  return withRetry(async () => {
+    const response = await fetch(
+      `${CALENDAR_API_BASE}/calendars/${calendarId}/events/${encodeURIComponent(eventId)}?fields=start`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
+    );
+    if (response.status === 404 || response.status === 410) return null;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to read calendar event start: ${response.status} ${errorText}`);
+    }
+
+    const data = (await response.json()) as { start?: { dateTime?: string; date?: string } };
+    if (data.start?.date) return { date: data.start.date, time: null }; // all-day
+    if (!data.start?.dateTime) return null;
+
+    const timezone = process.env.GOOGLE_CALENDAR_TIME_ZONE || "Asia/Singapore";
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date(data.start.dateTime));
+
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+    // en-CA renders midnight as "24" in some runtimes; normalize it.
+    const hour = get("hour") === "24" ? "00" : get("hour");
+    return {
+      date: `${get("year")}-${get("month")}-${get("day")}`,
+      time: `${hour}:${get("minute")}`,
+    };
+  });
 }
 
 /**

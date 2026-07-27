@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { processQueueRow, checkCalendarDrift, type SyncQueueRow } from "@/lib/syncProcessor";
+import { processQueueRow, reconcileCalendar, type SyncQueueRow } from "@/lib/syncProcessor";
 
 export const maxDuration = 60;
 
@@ -36,7 +36,16 @@ export async function GET(request: Request) {
   const rows = (claimed ?? []) as SyncQueueRow[];
   await Promise.allSettled(rows.map((row) => processQueueRow(admin, row)));
 
-  const drift = await checkCalendarDrift(admin);
+  const { checked, issues, healed } = await reconcileCalendar(admin, { heal: true });
 
-  return NextResponse.json({ claimed: rows.length, drift });
+  return NextResponse.json({
+    claimed: rows.length,
+    reconciliation: {
+      checked,
+      issues: issues.length,
+      healed,
+      // Conflicts aren't auto-fixed by design — they need a human decision.
+      conflicts: issues.filter((i) => i.state === "time_mismatch").length,
+    },
+  });
 }

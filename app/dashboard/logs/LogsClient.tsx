@@ -3,6 +3,26 @@
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { resolveCalendarConflict, retrySync } from "@/app/actions/jobActions";
+
+type ReconciliationIssue = {
+  jobId: string;
+  customerName: string | null;
+  eventType: "site_visit" | "job" | "second_visit";
+  state: "no_event_id" | "missing" | "cancelled" | "time_mismatch";
+  eventId: string | null;
+  expectedStart: string | null;
+  actualStart: string | null;
+};
+
+type FailedSync = { jobId: string; integration: string; status: string; error: string | null };
+
+const STATE_COPY: Record<ReconciliationIssue["state"], { label: string; detail: string }> = {
+  no_event_id: { label: "Not on calendar", detail: "This visit is scheduled but has no calendar event yet." },
+  missing: { label: "Event deleted", detail: "The calendar event no longer exists on Google." },
+  cancelled: { label: "Event cancelled", detail: "The event was deleted in Calendar and is invisible there." },
+  time_mismatch: { label: "Time differs", detail: "Calendar and the app disagree on when this is scheduled." },
+};
 
 type LogRow = {
   id: string;
@@ -41,12 +61,18 @@ export default function LogsClient({
   totalCount,
   pageSize,
   filters,
+  checked,
+  issues,
+  failedSyncs,
 }: {
   logs: LogRow[];
   jobNames: Record<string, string>;
   totalCount: number;
   pageSize: number;
   filters: { operation: string; outcome: string; q: string; page: number };
+  checked: number;
+  issues: ReconciliationIssue[];
+  failedSyncs: FailedSync[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -79,22 +105,181 @@ export default function LogsClient({
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const failureCount = logs.filter((l) => !l.success).length;
 
+  const [resolving, setResolving] = useState<string | null>(null);
+
+  const conflicts = issues.filter((i) => i.state === "time_mismatch");
+  const broken = issues.filter((i) => i.state !== "time_mismatch");
+  const problemCount = conflicts.length + failedSyncs.length;
+
+  const fmt = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleString("en-SG", { dateStyle: "medium", timeStyle: "short" }) : "—";
+
+  const handleResolve = async (
+    issue: ReconciliationIssue,
+    resolution: "accept_calendar" | "keep_app"
+  ) => {
+    const key = `${issue.jobId}-${issue.eventType}`;
+    setResolving(key);
+    const result = await resolveCalendarConflict(issue.jobId, issue.eventType, resolution);
+    setResolving(null);
+    if (result?.error) alert("Could not resolve: " + result.error);
+    else router.refresh();
+  };
+
+  const handleRetry = async (sync: FailedSync) => {
+    const key = `${sync.jobId}-${sync.integration}`;
+    setResolving(key);
+    const result = await retrySync(sync.jobId, sync.integration as any);
+    setResolving(null);
+    if (result?.error) alert("Still failing: " + result.error);
+    else router.refresh();
+  };
+
   return (
     <div style={{ padding: 24, maxWidth: 1200, margin: "0 auto", color: "#0f172a" }}>
       {/* ── Header ── */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", margin: "0 0 8px 0" }}>
-          Calendar Sync Log
+          Calendar Sync Health
         </h1>
         <p style={{ color: "#64748b", margin: 0, fontSize: 15 }}>
-          Every Google Calendar change this app has made ({totalCount.toLocaleString()} entries).
-          {failureCount > 0 && (
-            <span style={{ color: "#b91c1c", fontWeight: 600 }}>
-              {" "}· {failureCount} failure{failureCount === 1 ? "" : "s"} on this page
-            </span>
-          )}
+          Checked {checked} scheduled visit{checked === 1 ? "" : "s"} against Google Calendar just now.
         </p>
       </div>
+
+      {/* ── Health summary: the number that should always be zero ── */}
+      <div
+        style={{
+          background: problemCount === 0 ? "#f0fdf4" : "#fffbeb",
+          border: `1px solid ${problemCount === 0 ? "#bbf7d0" : "#fde68a"}`,
+          borderRadius: 12,
+          padding: "16px 20px",
+          marginBottom: 20,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+        }}
+      >
+        <span style={{ fontSize: 24, lineHeight: 1 }}>{problemCount === 0 ? "✅" : "⚠️"}</span>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: problemCount === 0 ? "#166534" : "#92400e" }}>
+            {problemCount === 0
+              ? "Every scheduled job matches Google Calendar."
+              : `${problemCount} item${problemCount === 1 ? "" : "s"} need attention.`}
+          </div>
+          {broken.length > 0 && (
+            <div style={{ fontSize: 12, color: "#92400e", marginTop: 3 }}>
+              {broken.length} broken event{broken.length === 1 ? " was" : "s were"} found and repaired automatically.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Conflicts: deliberately NOT auto-fixed, a human has to choose ── */}
+      {conflicts.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#0f172a", marginBottom: 4 }}>
+            Scheduling conflicts
+          </h2>
+          <p style={{ fontSize: 12.5, color: "#64748b", margin: "0 0 12px 0" }}>
+            Someone changed the time in Google Calendar. These aren't corrected automatically — a reschedule made
+            there is usually deliberate, so pick which one is right.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {conflicts.map((issue) => {
+              const key = `${issue.jobId}-${issue.eventType}`;
+              const busy = resolving === key;
+              return (
+                <div key={key} style={{ background: "#fff", border: "1px solid #fde68a", borderRadius: 12, padding: "14px 18px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <Link href={`/dashboard/jobs/${issue.jobId}`} style={{ fontSize: 14, fontWeight: 700, color: "#2563eb", textDecoration: "none" }}>
+                        {issue.customerName ?? issue.jobId.slice(0, 8)}
+                      </Link>
+                      <span style={{ fontSize: 12, color: "#64748b" }}> · {TYPE_LABELS[issue.eventType] ?? issue.eventType}</span>
+                      <div style={{ fontSize: 12.5, color: "#475569", marginTop: 6 }}>
+                        App says <strong>{fmt(issue.expectedStart)}</strong>
+                      </div>
+                      <div style={{ fontSize: 12.5, color: "#475569" }}>
+                        Calendar says <strong>{fmt(issue.actualStart)}</strong>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => handleResolve(issue, "accept_calendar")}
+                        style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "#0f172a", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", whiteSpace: "nowrap" }}
+                      >
+                        {busy ? "Working…" : "Use Calendar's time"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => handleResolve(issue, "keep_app")}
+                        style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", whiteSpace: "nowrap" }}
+                      >
+                        Keep app's time
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Syncs still failing after retries ── */}
+      {failedSyncs.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#0f172a", marginBottom: 12 }}>
+            Failing syncs
+          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {failedSyncs.map((sync) => {
+              const key = `${sync.jobId}-${sync.integration}`;
+              const busy = resolving === key;
+              return (
+                <div key={key} style={{ background: "#fff", border: "1px solid #fecaca", borderRadius: 12, padding: "14px 18px", display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <Link href={`/dashboard/jobs/${sync.jobId}`} style={{ fontSize: 14, fontWeight: 700, color: "#2563eb", textDecoration: "none" }}>
+                      {jobNames[sync.jobId] ?? sync.jobId.slice(0, 8)}
+                    </Link>
+                    <span style={{ fontSize: 12, color: "#64748b" }}> · {sync.integration}</span>
+                    {sync.error && (
+                      <div style={{ fontSize: 11, color: "#b91c1c", marginTop: 4, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                        {sync.error.length > 180 ? `${sync.error.slice(0, 180)}…` : sync.error}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => handleRetry(sync)}
+                    style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#dc2626", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", whiteSpace: "nowrap" }}
+                  >
+                    {busy ? "Retrying…" : "Retry"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── History ── */}
+      <h2 style={{ fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#0f172a", marginBottom: 4 }}>
+        History
+      </h2>
+      <p style={{ fontSize: 12.5, color: "#64748b", margin: "0 0 12px 0" }}>
+        Every Google Calendar change this app has made ({totalCount.toLocaleString()} entries).
+        {failureCount > 0 && (
+          <span style={{ color: "#b91c1c", fontWeight: 600 }}>
+            {" "}· {failureCount} failure{failureCount === 1 ? "" : "s"} on this page
+          </span>
+        )}
+      </p>
 
       {/* ── Filters ── */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16, alignItems: "center" }}>

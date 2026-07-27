@@ -48,3 +48,16 @@ export async function retrySync(jobId: string, integration: "calendar" | "sheets
 export async function saveJob(dataToSave: any, newCustomerData?: any) {
   return JobService.saveJob(dataToSave, newCustomerData);
 }
+
+/**
+ * Resolves a reconciliation conflict where Google Calendar's start time
+ * differs from the app's — someone rescheduled the event directly in
+ * Calendar. Delegates entirely to JobService.
+ */
+export async function resolveCalendarConflict(
+  jobId: string,
+  eventType: "site_visit" | "job" | "second_visit",
+  resolution: "accept_calendar" | "keep_app"
+) {
+  return JobService.resolveCalendarConflict(jobId, eventType, resolution);
+}

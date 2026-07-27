@@ -18,7 +18,7 @@ import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
-import { deleteCalendarEvent } from "@/lib/googleCalendar";
+import { deleteCalendarEvent, getCalendarEventStart } from "@/lib/googleCalendar";
 import { getStageDB } from "@/lib/constants";
 import {
   processJobQueue,
@@ -245,6 +245,62 @@ export async function retrySync(
 
   invalidateJobCaches();
   return finalRow?.last_error ? { error: finalRow.last_error } : { success: true };
+}
+
+/** Column pairs backing each calendar slot. */
+const SLOT_COLUMNS = {
+  site_visit: { date: "visit_date", time: "visit_time" },
+  job: { date: "job_date", time: "job_time" },
+  second_visit: { date: "second_visit_date", time: "second_visit_time" },
+} as const;
+
+/**
+ * Resolves a start-time conflict between the app and Google Calendar.
+ *
+ * "accept_calendar" writes Google's time back into the job, which is usually
+ * the right answer when someone deliberately rescheduled in Calendar: it also
+ * fixes the invoices, reports and Sheets backup that read these columns, and
+ * the conflict then disappears by construction rather than needing to be
+ * acknowledged and remembered.
+ *
+ * "keep_app" forces a re-sync, overwriting Calendar with the app's time.
+ */
+export async function resolveCalendarConflict(
+  jobId: string,
+  eventType: keyof typeof SLOT_COLUMNS,
+  resolution: "accept_calendar" | "keep_app"
+): Promise<{ success?: boolean; error?: string } & SyncOutcome> {
+  const supabase = await createClient();
+  const cols = SLOT_COLUMNS[eventType];
+  if (!cols) return { error: "Unknown calendar slot." };
+
+  if (resolution === "keep_app") {
+    await supabase.rpc("enqueue_sync", { p_job_id: jobId, p_integration: "calendar" });
+    const { calendarError } = await syncCalendarNow(jobId);
+    invalidateJobCaches();
+    return calendarError ? { error: calendarError } : { success: true };
+  }
+
+  // accept_calendar — read the event's real start and store it on the job.
+  const admin = createAdminClient();
+  const { data: job } = await admin
+    .from("jobs")
+    .select(`${cols.date}, ${cols.time}, visit_event_id, job_event_id, second_visit_event_id`)
+    .eq("id", jobId)
+    .single();
+
+  const eventIdColumn =
+    eventType === "site_visit" ? "visit_event_id" : eventType === "job" ? "job_event_id" : "second_visit_event_id";
+  const eventId = (job as any)?.[eventIdColumn];
+  if (!eventId) return { error: "This slot has no calendar event to accept." };
+
+  const actual = await getCalendarEventStart(eventId);
+  if (!actual) return { error: "Could not read the event's current time from Google Calendar." };
+
+  // Store in the calendar's own timezone so the date/time pair matches what
+  // people see in Calendar, not the server's locale.
+  const updates = { [cols.date]: actual.date, [cols.time]: actual.time };
+  return updateFields(jobId, updates);
 }
 
 /**

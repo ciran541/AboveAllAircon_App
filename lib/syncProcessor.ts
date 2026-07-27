@@ -18,8 +18,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   batchSyncCalendarEvents,
-  listCalendarEventStatuses,
+  listCalendarEvents,
   getCalendarEventStatus,
+  expectedEventStart,
   logCalendarEvent,
 } from "@/lib/googleCalendar";
 import { logJobToSheets, logMetaLeadToSheets } from "@/lib/sheetsBackup";
@@ -205,19 +206,42 @@ export async function syncCalendarNow(jobId: string): Promise<{
   return { calendarError: finalRow?.last_error ?? undefined, background };
 }
 
+/** What's wrong with one job slot, from Google's point of view. */
+export type SlotState = "no_event_id" | "missing" | "cancelled" | "time_mismatch";
+
+export type ReconciliationIssue = {
+  jobId: string;
+  customerName: string | null;
+  eventType: "site_visit" | "job" | "second_visit";
+  state: SlotState;
+  eventId: string | null;
+  expectedStart: string | null;
+  actualStart: string | null;
+};
+
+/** States where the event is unambiguously broken, so healing is safe. */
+const AUTO_HEAL_STATES: SlotState[] = ["no_event_id", "missing", "cancelled"];
+
 /**
- * Proactively checks every active job's calendar event(s) for drift — most
- * notably a manual delete in Calendar, which soft-deletes to "cancelled"
- * rather than purging, so our own PATCH-based sync would otherwise report
- * "success" while the event stays invisible until the job happens to be
- * edited again. Run daily from the cron safety-net route. Any drift found is
- * logged (operation: "drift_detected") then immediately healed by re-running
- * the normal calendar sync for that job, which logs its own create/update
- * outcome the same way a regular sync would.
+ * Compares what the app believes about every scheduled job against what
+ * Google Calendar actually holds — the difference between "our API call
+ * returned 200" and "the event is really there, on the right day".
+ *
+ * Driven from job *slots that have a date*, not from stored event ids: a slot
+ * with a date and no event id means the job isn't on the calendar at all,
+ * which is the single most important case and the one an id-driven check
+ * structurally cannot see.
+ *
+ * Healing policy (deliberate): unambiguously broken events are repaired
+ * automatically, but a start-time difference is only flagged. Someone dragging
+ * an event to a new time in Calendar is a legitimate reschedule, and silently
+ * overwriting it would be the same class of bug as resetting a manually
+ * changed colour.
  */
-export async function checkCalendarDrift(
-  admin: AdminClient
-): Promise<{ checked: number; driftFound: number }> {
+export async function reconcileCalendar(
+  admin: AdminClient,
+  opts: { heal?: boolean } = {}
+): Promise<{ checked: number; issues: ReconciliationIssue[]; healed: number }> {
   // Only look at jobs scheduled from ~60 days ago onward. Drift on long-past
   // jobs has no operational value, and bounding the window keeps both the
   // Calendar listing and this query small enough to finish well inside the
@@ -228,85 +252,111 @@ export async function checkCalendarDrift(
 
   const { data: jobs } = await admin
     .from("jobs")
-    .select("id, visit_date, visit_event_id, job_date, job_event_id, second_visit_date, second_visit_event_id")
+    .select(
+      "id, visit_date, visit_time, visit_event_id, job_date, job_time, job_event_id, " +
+        "second_visit_date, second_visit_time, second_visit_event_id, customers(name)"
+    )
     .or(
       `visit_date.gte.${windowStartDate},job_date.gte.${windowStartDate},second_visit_date.gte.${windowStartDate}`
     );
 
-  // One bulk listing instead of a request per event — see
-  // listCalendarEventStatuses for why (this used to take minutes and rate-limit).
-  const statuses = await listCalendarEventStatuses(windowStart.toISOString());
+  const listed = await listCalendarEvents(windowStart.toISOString());
 
   let checked = 0;
-  let driftFound = 0;
+  const issues: ReconciliationIssue[] = [];
   const jobsToHeal = new Set<string>();
 
   for (const job of (jobs as any[]) ?? []) {
+    const customer = Array.isArray(job.customers) ? job.customers[0] : job.customers;
     const slots = [
-      { date: job.visit_date, eventId: job.visit_event_id, type: "site_visit" as const },
-      { date: job.job_date, eventId: job.job_event_id, type: "job" as const },
-      { date: job.second_visit_date, eventId: job.second_visit_event_id, type: "second_visit" as const },
+      { date: job.visit_date, time: job.visit_time, eventId: job.visit_event_id, type: "site_visit" as const },
+      { date: job.job_date, time: job.job_time, eventId: job.job_event_id, type: "job" as const },
+      { date: job.second_visit_date, time: job.second_visit_time, eventId: job.second_visit_event_id, type: "second_visit" as const },
     ];
 
     for (const slot of slots) {
-      // A slot with a date but no event id is the worst case — the job simply
-      // isn't on the calendar at all — so it must be counted as drift, not
-      // skipped. (This is exactly the "job missing from Calendar" complaint.)
       if (!slot.date || slot.date < windowStartDate) continue;
       checked++;
 
-      let drifted = false;
+      const expectedStart = expectedEventStart(slot.date, slot.time ?? null);
+      let state: SlotState | null = null;
+      let actualStart: string | null = null;
+
       if (!slot.eventId) {
-        drifted = true;
+        state = "no_event_id";
       } else {
-        const listed = statuses.get(slot.eventId);
-        if (listed === "cancelled") {
-          drifted = true;
-        } else if (listed === undefined) {
-          // Absent from the listing isn't proof of health: it may have been
-          // hard-purged, or moved outside the listing window. Confirm directly
-          // before deciding. Expected to be rare, so the extra call is cheap.
+        let event = listed.get(slot.eventId);
+        if (!event) {
+          // Absent from the listing isn't proof of anything: it may have been
+          // purged, or moved outside the window. Confirm directly before
+          // deciding. Rare, so the extra call is cheap.
           try {
-            drifted = (await getCalendarEventStatus(slot.eventId)) !== "confirmed";
+            const status = await getCalendarEventStatus(slot.eventId);
+            if (status === null) state = "missing";
+            else if (status === "cancelled") state = "cancelled";
           } catch {
-            drifted = false; // transient API error — next run re-checks
+            continue; // transient API error — next run re-checks
+          }
+        } else if (event.status === "cancelled") {
+          state = "cancelled";
+        } else {
+          actualStart = event.startDateTime ?? event.startDate ?? null;
+          // Compare instants, never strings — Google normalizes UTC offsets,
+          // so "+08:00" can come back as a different but equivalent spelling.
+          const expectedMs = Date.parse(expectedStart);
+          const actualMs = event.startDateTime ? Date.parse(event.startDateTime) : NaN;
+          if (!event.startDateTime || Number.isNaN(actualMs) || actualMs !== expectedMs) {
+            state = "time_mismatch";
           }
         }
       }
 
-      if (drifted) {
-        driftFound++;
+      if (!state) continue;
+
+      issues.push({
+        jobId: job.id,
+        customerName: customer?.name ?? null,
+        eventType: slot.type,
+        state,
+        eventId: slot.eventId ?? null,
+        expectedStart,
+        actualStart,
+      });
+
+      if (AUTO_HEAL_STATES.includes(state)) {
         await logCalendarEvent({
           jobId: job.id,
           eventType: slot.type,
           operation: "drift_detected",
           eventId: slot.eventId,
           success: true,
+          error: `Slot is ${state.replace(/_/g, " ")} on Google Calendar; repairing.`,
         });
         jobsToHeal.add(job.id);
       }
     }
   }
 
-  // Heal one job at a time, not all in parallel — a burst of concurrent
-  // Calendar API calls across many drifted jobs at once is exactly what trips
-  // Google's short-window rate limit (a single job's own upserts already run
-  // in parallel via batchSyncCalendarEvents, so this still overlaps some
-  // calls, just not across the whole drifted set simultaneously).
-  //
-  // Heal *through the queue* rather than calling syncCalendarForJob directly,
-  // so the sync_queue row reflects the outcome. Healing directly left rows
-  // stuck showing a stale last_error long after the calendar was repaired,
-  // which is exactly the "banner says broken but it isn't" confusion.
-  for (const jobId of jobsToHeal) {
-    try {
-      await admin.rpc("enqueue_sync", { p_job_id: jobId, p_integration: "calendar" });
-      await processJobQueue(jobId);
-    } catch {
-      // Individual failures are already recorded on the queue row and in
-      // calendar_event_log; the next run picks them up again.
+  let healed = 0;
+  if (opts.heal) {
+    // One job at a time — a burst of concurrent Calendar writes across many
+    // drifted jobs is exactly what trips Google's short-window rate limit.
+    //
+    // Heal *through the queue* rather than calling syncCalendarForJob
+    // directly, so the sync_queue row reflects the outcome. Healing directly
+    // left rows showing a stale last_error long after the calendar was
+    // repaired — the "banner says broken but it isn't" confusion.
+    for (const jobId of jobsToHeal) {
+      try {
+        await admin.rpc("enqueue_sync", { p_job_id: jobId, p_integration: "calendar" });
+        await processJobQueue(jobId);
+        healed++;
+      } catch {
+        // Already recorded on the queue row and in calendar_event_log; the
+        // next run picks it up again.
+      }
     }
   }
 
-  return { checked, driftFound };
+  return { checked, issues, healed };
 }
