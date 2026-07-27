@@ -37,14 +37,20 @@ export default async function SyncHealthPage({
   // Calendar listing plus one jobs query, and a stored snapshot would be
   // stale-by-design between cron runs — contradicting reality is worse than
   // recomputing on an admin page nobody loads in a loop.
-  const [{ data: logs, count }, reconciliation, { data: failedSyncs }] = await Promise.all([
-    query,
-    reconcileCalendar(admin).catch(() => ({ checked: 0, issues: [], healed: 0 })),
-    admin
-      .from("sync_queue")
-      .select("job_id, integration, status, last_error, updated_at")
-      .not("last_error", "is", null),
-  ]);
+  const [{ data: logs, count }, reconciliation, { data: failedSyncs }, { data: alertState }] =
+    await Promise.all([
+      query,
+      reconcileCalendar(admin).catch(() => ({ checked: 0, issues: [], healed: 0 })),
+      admin
+        .from("sync_queue")
+        .select("job_id, integration, status, last_error, updated_at")
+        .not("last_error", "is", null),
+      admin.from("sync_alert_state").select("last_cron_run_at").eq("id", 1).maybeSingle(),
+    ]);
+
+  // The daily check can't report its own absence, so surface it here instead.
+  const lastCronRunAt = alertState?.last_cron_run_at ?? null;
+  const cronStale = !lastCronRunAt || Date.now() - new Date(lastCronRunAt).getTime() > 48 * 3600 * 1000;
 
   // Resolve customer names for the job ids on this page only — keeps the
   // listing readable without joining the whole jobs table on every query.
@@ -73,6 +79,8 @@ export default async function SyncHealthPage({
       filters={{ operation, outcome, q, page }}
       checked={reconciliation.checked}
       issues={reconciliation.issues}
+      cronStale={cronStale}
+      lastCronRunAt={lastCronRunAt}
       failedSyncs={(failedSyncs ?? []).map((f: any) => ({
         jobId: f.job_id,
         integration: f.integration,

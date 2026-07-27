@@ -13,6 +13,11 @@ create table public.sync_alert_state (
   -- means something genuinely new is wrong, which is worth an email.
   fingerprint  text,
   last_sent_at timestamptz,
+  -- Stamped at the end of every successful cron run. A cron that stops firing
+  -- cannot report its own absence -- if CRON_SECRET is missing in production
+  -- the whole safety net silently does nothing -- so the Sync Health page
+  -- reads this and warns when it goes stale.
+  last_cron_run_at timestamptz,
   updated_at   timestamptz not null default now()
 );
 

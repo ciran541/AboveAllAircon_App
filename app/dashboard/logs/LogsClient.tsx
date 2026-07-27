@@ -64,6 +64,8 @@ export default function LogsClient({
   checked,
   issues,
   failedSyncs,
+  cronStale,
+  lastCronRunAt,
 }: {
   logs: LogRow[];
   jobNames: Record<string, string>;
@@ -73,6 +75,8 @@ export default function LogsClient({
   checked: number;
   issues: ReconciliationIssue[];
   failedSyncs: FailedSync[];
+  cronStale: boolean;
+  lastCronRunAt: string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -146,6 +150,26 @@ export default function LogsClient({
           Checked {checked} scheduled visit{checked === 1 ? "" : "s"} against Google Calendar just now.
         </p>
       </div>
+
+      {/* ── The safety net itself isn't running ── */}
+      {cronStale && (
+        <div style={{ background: "#fef2f2", border: "2px solid #fecaca", borderRadius: 12, padding: "16px 20px", marginBottom: 20, display: "flex", alignItems: "flex-start", gap: 12 }}>
+          <span style={{ fontSize: 24, lineHeight: 1 }}>🚨</span>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "#991b1b" }}>
+              The daily automatic check is not running.
+            </div>
+            <div style={{ fontSize: 13, color: "#b91c1c", marginTop: 4, lineHeight: 1.5 }}>
+              {lastCronRunAt
+                ? `It last ran on ${new Date(lastCronRunAt).toLocaleString("en-SG", { dateStyle: "medium", timeStyle: "short" })}.`
+                : "It has never run."}{" "}
+              Nothing is checking overnight that jobs actually reached Google Calendar, and no alert emails
+              will be sent. Usually this means <code style={{ background: "#fee2e2", padding: "1px 5px", borderRadius: 4 }}>CRON_SECRET</code>{" "}
+              is missing or wrong in the deployment settings.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Health summary: the number that should always be zero ── */}
       <div

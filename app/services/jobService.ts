@@ -127,7 +127,9 @@ async function recordJobActivity(
   jobId: string,
   action: "created" | "updated" | "deleted",
   changes: FieldChange[],
-  supabase: SupabaseClient
+  supabase: SupabaseClient,
+  /** Human-readable snapshot — the only way to identify a deleted job later. */
+  jobLabel?: string | null
 ): Promise<void> {
   if (action === "updated" && changes.length === 0) return;
   try {
@@ -137,6 +139,7 @@ async function recordJobActivity(
       actor_id: auth?.user?.id ?? null,
       action,
       changes,
+      job_label: jobLabel ?? null,
     });
   } catch (err) {
     console.error("[jobActivity] failed to record activity:", err);
@@ -311,9 +314,14 @@ export async function deleteJob(
 ): Promise<{ success?: boolean; error?: string }> {
   const supabase = await createClient();
 
+  // Capture enough to identify what was destroyed *before* destroying it —
+  // afterwards there is nothing left to look up.
   const { data: job, error: fetchError } = await supabase
     .from("jobs")
-    .select("visit_event_id, job_event_id, second_visit_event_id")
+    .select(
+      "visit_event_id, job_event_id, second_visit_event_id, stage, service_type, " +
+        "visit_date, job_date, second_visit_date, quoted_amount, customers(name, phone)"
+    )
     .eq("id", jobId)
     .single();
 
@@ -325,8 +333,29 @@ export async function deleteJob(
     { id: (job as any)?.second_visit_event_id, type: "second_visit" as const },
   ].filter((e) => e.id) as { id: string; type: "site_visit" | "job" | "second_visit" }[];
 
+  const customer = Array.isArray((job as any)?.customers)
+    ? (job as any).customers[0]
+    : (job as any)?.customers;
+
   const { error } = await supabase.from("jobs").delete().eq("id", jobId);
   if (error) return { error: error.message };
+
+  // Recorded after the delete succeeds, so the log never claims a deletion
+  // that didn't happen. job_activity intentionally has no foreign key to jobs
+  // (see migration 20260801000000) so this record outlives the job.
+  await recordJobActivity(
+    jobId,
+    "deleted",
+    [
+      { field: "stage", from: (job as any)?.stage ?? null, to: null },
+      { field: "service_type", from: (job as any)?.service_type ?? null, to: null },
+      { field: "visit_date", from: (job as any)?.visit_date ?? null, to: null },
+      { field: "job_date", from: (job as any)?.job_date ?? null, to: null },
+      { field: "quoted_amount", from: (job as any)?.quoted_amount ?? null, to: null },
+    ].filter((c) => c.from !== null),
+    supabase,
+    customer?.name ? `${customer.name}${customer.phone ? ` (${customer.phone})` : ""}` : null
+  );
 
   // Calendar cleanup runs *after* the response is sent, so the delete feels
   // instant instead of blocking on 1-3 external Google Calendar calls. after()

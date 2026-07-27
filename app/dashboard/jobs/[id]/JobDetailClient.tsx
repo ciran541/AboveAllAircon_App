@@ -79,11 +79,11 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
   return (
     <div style={{ display: "flex", gap: 12, padding: "10px 0", borderTop: "1px solid #f1f5f9" }}>
       <span style={{ fontSize: 15, lineHeight: 1.4, width: 18, flexShrink: 0 }}>
-        {entry.action === "created" ? "✨" : "✏️"}
+        {entry.action === "created" ? "✨" : entry.action === "deleted" ? "🗑️" : "✏️"}
       </span>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>
-          {entry.action === "created" ? "Job created" : "Job updated"}
+        <div style={{ fontSize: 13, color: entry.action === "deleted" ? "#991b1b" : "#0f172a", fontWeight: entry.action === "deleted" ? 700 : 600 }}>
+          {entry.action === "created" ? "Job created" : entry.action === "deleted" ? "Job deleted" : "Job updated"}
           {entry.actorName ? ` by ${entry.actorName}` : ""}
         </div>
         {named.length > 0 && (

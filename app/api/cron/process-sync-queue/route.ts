@@ -58,6 +58,14 @@ export async function GET(request: Request) {
     appUrl: process.env.NEXT_PUBLIC_APP_URL,
   });
 
+  // Proof of life. A cron that stops firing can't report its own absence — if
+  // CRON_SECRET is wrong or missing in production the entire safety net does
+  // nothing, silently. The Sync Health page reads this timestamp and says so.
+  await admin
+    .from("sync_alert_state")
+    .update({ last_cron_run_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", 1);
+
   return NextResponse.json({
     claimed: rows.length,
     reconciliation: {
