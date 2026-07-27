@@ -26,7 +26,7 @@ import {
   syncCalendarNow,
   type SyncIntegration,
 } from "@/lib/syncProcessor";
-import { diffJob, affectsCalendar, CALENDAR_JOB_FIELDS } from "@/lib/jobDiff";
+import { diffJob, affectsCalendar, CALENDAR_JOB_FIELDS, type FieldChange } from "@/lib/jobDiff";
 
 /** Invalidates all cached job data for a specific user + the admin dashboard. */
 function invalidateJobCaches(userId?: string) {
@@ -114,6 +114,35 @@ async function fetchCurrentJob(jobId: string, supabase: SupabaseClient) {
   return data;
 }
 
+/**
+ * Records what a person changed on a job. Best-effort: history is valuable
+ * but never worth failing a save over.
+ *
+ * Written with the admin client (so RLS doesn't have to grant every staff
+ * role insert rights) with the actor captured explicitly. No-op changes are
+ * skipped, which keeps the debounced quotation autosave from filling the
+ * timeline with empty entries.
+ */
+async function recordJobActivity(
+  jobId: string,
+  action: "created" | "updated" | "deleted",
+  changes: FieldChange[],
+  supabase: SupabaseClient
+): Promise<void> {
+  if (action === "updated" && changes.length === 0) return;
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    await createAdminClient().from("job_activity").insert({
+      job_id: jobId,
+      actor_id: auth?.user?.id ?? null,
+      action,
+      changes,
+    });
+  } catch (err) {
+    console.error("[jobActivity] failed to record activity:", err);
+  }
+}
+
 // ── Exported service functions ────────────────────────────────────────────────
 
 /**
@@ -142,6 +171,7 @@ export async function transitionStage(
   if (error) return { error: error.message };
 
   const changes = diffJob(before, payload);
+  await recordJobActivity(jobId, "updated", changes, supabase);
   const sync = await enqueueAndSync(jobId, updatedJob, supabase, affectsCalendar(changes));
 
   invalidateJobCaches();
@@ -175,6 +205,7 @@ export async function updateFields(
   if (error) return { error: error.message };
 
   const changes = diffJob(before, updates);
+  await recordJobActivity(jobId, "updated", changes, supabase);
   const sync = await enqueueAndSync(jobId, data, supabase, affectsCalendar(changes));
 
   invalidateJobCaches();
@@ -315,6 +346,7 @@ export async function saveJob(
       fullJob = data;
       // A brand new job needs a calendar event only if it's actually scheduled.
       syncCalendar = hasAnyScheduledDate(fullJob);
+      await recordJobActivity(fullJob.id, "created", [], supabase);
     } else {
       const { id, ...updatePayload } = payload;
       const before = await fetchCurrentJob(id, supabase);
@@ -326,7 +358,9 @@ export async function saveJob(
         .single();
       if (updateError) return { error: updateError.message };
       fullJob = data;
-      syncCalendar = affectsCalendar(diffJob(before, updatePayload));
+      const changes = diffJob(before, updatePayload);
+      await recordJobActivity(id, "updated", changes, supabase);
+      syncCalendar = affectsCalendar(changes);
     }
 
     const sync = await enqueueAndSync(fullJob.id, fullJob, supabase, syncCalendar);

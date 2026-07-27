@@ -42,14 +42,39 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     .eq('job_id', id)
     .not('last_error', 'is', null);
 
+  // Timeline sources: what people changed, and what we told Google about it.
+  const activityPromise = adminClient
+    .from('job_activity')
+    .select('id, actor_id, action, changes, created_at')
+    .eq('job_id', id)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  const calendarLogPromise = adminClient
+    .from('calendar_event_log')
+    .select('id, event_type, operation, success, error, created_at')
+    .eq('job_id', id)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
   // 2. Await them all at once (huge latency drop)
   const [
     { data: authData },
     { data: job, error },
     { data: materials },
     staffProfiles,
-    { data: syncIssues }
-  ] = await Promise.all([userPromise, jobPromise, materialsPromise, staffProfilesPromise, syncIssuesPromise]);
+    { data: syncIssues },
+    { data: activity },
+    { data: calendarLog }
+  ] = await Promise.all([
+    userPromise,
+    jobPromise,
+    materialsPromise,
+    staffProfilesPromise,
+    syncIssuesPromise,
+    activityPromise,
+    calendarLogPromise,
+  ]);
 
   if (error || !job) {
     console.error('Job Detail Fetch Error:', error);
@@ -66,6 +91,37 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     assigned_staff: assignedStaff,
     created_by_staff: createdByStaff
   };
+
+  // Merge "what a person changed" with "what we told Google" into one
+  // chronological story — that pairing is the whole point of the timeline,
+  // since either half alone fails to explain what happened to a job.
+  const staffName = (actorId: string | null) => {
+    if (!actorId) return null;
+    const p: any = staffProfiles?.find((s: any) => s.id === actorId);
+    return p?.full_name || p?.name || null;
+  };
+
+  const timeline = [
+    ...(activity ?? []).map((a: any) => ({
+      kind: 'activity' as const,
+      id: a.id,
+      at: a.created_at,
+      actorName: staffName(a.actor_id),
+      action: a.action,
+      changes: Array.isArray(a.changes) ? a.changes : [],
+    })),
+    ...(calendarLog ?? []).map((c: any) => ({
+      kind: 'calendar' as const,
+      id: c.id,
+      at: c.created_at,
+      eventType: c.event_type,
+      operation: c.operation,
+      success: c.success,
+      error: c.error,
+    })),
+  ]
+    .sort((a, b) => String(b.at).localeCompare(String(a.at)))
+    .slice(0, 60);
 
   return (
     <div style={{ padding: '24px 40px', background: '#f8fafc', minHeight: '100vh' }}>
@@ -84,6 +140,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         initialMaterials={materials || []}
         staffProfiles={staffProfiles || []}
         initialSyncIssues={syncIssues || []}
+        initialTimeline={timeline}
       />
     </div>
   )

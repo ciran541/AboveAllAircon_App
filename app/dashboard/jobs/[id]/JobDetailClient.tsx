@@ -11,6 +11,13 @@ import { logJobMaterial, removeJobMaterial } from "@/app/actions/inventoryAction
 import { updateCustomerDetails } from "@/app/actions/customerActions";
 import { JOB_STAGES as STAGES, getStageDisplay, getStageDB, UNIT_TYPES, LEAD_SOURCES, getSourceDisplay } from "@/lib/constants";
 import { TimePickerUncontrolled } from "@/components/TimePicker";
+import {
+  fieldLabel,
+  formatValue,
+  isNamedField,
+  CALENDAR_SLOT_LABELS,
+  CALENDAR_OP_LABELS,
+} from "@/lib/activityLabels";
 
 const SYNC_LABELS: Record<string, string> = {
   calendar: "Google Calendar sync",
@@ -18,16 +25,102 @@ const SYNC_LABELS: Record<string, string> = {
   meta_lead: "Meta lead sync",
 };
 
+type TimelineEntry =
+  | {
+      kind: "activity";
+      id: string;
+      at: string;
+      actorName: string | null;
+      action: string;
+      changes: { field: string; from: unknown; to: unknown }[];
+    }
+  | {
+      kind: "calendar";
+      id: string;
+      at: string;
+      eventType: string | null;
+      operation: string;
+      success: boolean;
+      error: string | null;
+    };
+
+/** One entry in the job history: a human change, or a calendar operation. */
+function TimelineRow({ entry }: { entry: TimelineEntry }) {
+  const when = new Date(entry.at).toLocaleString("en-SG", { dateStyle: "medium", timeStyle: "short" });
+
+  if (entry.kind === "calendar") {
+    const slot = entry.eventType ? CALENDAR_SLOT_LABELS[entry.eventType] ?? entry.eventType : null;
+    const label = CALENDAR_OP_LABELS[entry.operation] ?? entry.operation;
+    return (
+      <div style={{ display: "flex", gap: 12, padding: "10px 0", borderTop: "1px solid #f1f5f9" }}>
+        <span style={{ fontSize: 15, lineHeight: 1.4, width: 18, flexShrink: 0 }}>
+          {entry.success ? "📅" : "⚠️"}
+        </span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 13, color: entry.success ? "#475569" : "#b91c1c", fontWeight: entry.success ? 500 : 700 }}>
+            {label}
+            {slot ? ` — ${slot}` : ""}
+            {!entry.success && " (failed)"}
+          </div>
+          {entry.error && (
+            <div style={{ fontSize: 11, color: "#b91c1c", marginTop: 3, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {entry.error.length > 200 ? `${entry.error.slice(0, 200)}…` : entry.error}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{when}</div>
+        </div>
+      </div>
+    );
+  }
+
+  const named = entry.changes.filter((c) => isNamedField(c.field));
+  const otherCount = entry.changes.length - named.length;
+
+  return (
+    <div style={{ display: "flex", gap: 12, padding: "10px 0", borderTop: "1px solid #f1f5f9" }}>
+      <span style={{ fontSize: 15, lineHeight: 1.4, width: 18, flexShrink: 0 }}>
+        {entry.action === "created" ? "✨" : "✏️"}
+      </span>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 13, color: "#0f172a", fontWeight: 600 }}>
+          {entry.action === "created" ? "Job created" : "Job updated"}
+          {entry.actorName ? ` by ${entry.actorName}` : ""}
+        </div>
+        {named.length > 0 && (
+          <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+            {named.map((c) => (
+              <div key={c.field} style={{ fontSize: 12, color: "#475569" }}>
+                <span style={{ fontWeight: 600 }}>{fieldLabel(c.field)}:</span>{" "}
+                <span style={{ color: "#94a3b8" }}>{formatValue(c.field, c.from)}</span>
+                {" → "}
+                <span style={{ color: "#0f172a", fontWeight: 600 }}>{formatValue(c.field, c.to)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {otherCount > 0 && (
+          <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
+            and {otherCount} other field{otherCount === 1 ? "" : "s"}
+          </div>
+        )}
+        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{when}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function JobDetailClient({
   initialJob,
   initialMaterials,
   staffProfiles,
   initialSyncIssues,
+  initialTimeline = [],
 }: {
   initialJob: any;
   initialMaterials: any[];
   staffProfiles: any[];
   initialSyncIssues: { id: string; integration: string; status: string; last_error: string | null }[];
+  initialTimeline?: TimelineEntry[];
 }) {
   const [job, setJob] = useState(initialJob);
   const [materials, setMaterials] = useState(initialMaterials);
@@ -37,6 +130,7 @@ export default function JobDetailClient({
   const [retryingSync, setRetryingSync] = useState<string | null>(null);
   const [calendarPending, setCalendarPending] = useState(false);
   const [showCRMPanel, setShowCRMPanel] = useState(false);
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [editedNotes, setEditedNotes] = useState(initialJob.notes || "");
 
@@ -855,6 +949,28 @@ export default function JobDetailClient({
                 </div>
               </div>
             </form>
+          )}
+        </div>
+
+        {/* ── HISTORY (what changed, and what we told Google about it) ── */}
+        <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+          <button type="button" onClick={() => setShowHistoryPanel(!showHistoryPanel)}
+            style={{ width: "100%", padding: "18px 24px", background: "none", border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", textAlign: "left" }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              History{initialTimeline.length > 0 ? ` (${initialTimeline.length})` : ""}
+            </span>
+            <span style={{ fontSize: 18, color: "#94a3b8", transition: "transform 0.2s", transform: showHistoryPanel ? "rotate(180deg)" : "none" }}>⌄</span>
+          </button>
+          {showHistoryPanel && (
+            <div style={{ padding: "0 24px 20px 24px", borderTop: "1px solid #f1f5f9" }}>
+              {initialTimeline.length === 0 ? (
+                <div style={{ padding: "20px 0", fontSize: 13, color: "#94a3b8", textAlign: "center" }}>
+                  No history recorded yet. Changes made from now on will appear here.
+                </div>
+              ) : (
+                initialTimeline.map((entry) => <TimelineRow key={`${entry.kind}-${entry.id}`} entry={entry} />)
+              )}
+            </div>
           )}
         </div>
       </div>
