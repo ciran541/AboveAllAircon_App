@@ -214,6 +214,7 @@ export default function JobColumn({
                 </div>
                 <button
                   title="Delete job"
+                  aria-label="Delete job"
                   className="job-card-delete-btn"
                   onClick={(e) => { e.stopPropagation(); onDeleteJob(job); }}
                   style={{

@@ -1247,13 +1247,22 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   box-shadow: inset 0 0 0 2px var(--accent) !important;
 }
 
-/* delete button hover — only visible on card hover */
-.job-card-v2 .job-card-delete-btn { opacity: 0; }
-.job-card-v2:hover .job-card-delete-btn { opacity: 1; }
-.job-card-delete-btn:hover { background: #fef2f2 !important; color: #ef4444 !important; }
-
-/* Delete button inside job card */
-.job-card-delete-btn:hover {
+/* Delete button reveal:
+   - Touch / no-hover devices: always visible (there's no hover to trigger it).
+   - Hover devices: hidden until the card is hovered, the card holds keyboard
+     focus (:focus-within), or the button itself is focused. */
+.job-card-v2 .job-card-delete-btn {
+  opacity: 1;
+  transition: opacity 0.14s ease, background 0.15s, color 0.15s;
+}
+@media (hover: hover) {
+  .job-card-v2 .job-card-delete-btn { opacity: 0; }
+  .job-card-v2:hover .job-card-delete-btn,
+  .job-card-v2:focus-within .job-card-delete-btn,
+  .job-card-delete-btn:focus-visible { opacity: 1; }
+}
+.job-card-delete-btn:hover,
+.job-card-delete-btn:focus-visible {
   background: #fef2f2 !important;
   color: #ef4444 !important;
 }
@@ -1445,6 +1454,32 @@ textarea.form-input { resize: vertical; min-height: 80px; }
   .dashboard-content {
     padding: 16px;
   }
+}
+
+/* ─── Keyboard focus visibility (a11y) ───────────────────────────────────── */
+/* Mouse/touch users see nothing; keyboard users get a clear ring on every
+   interactive element. Placed last so it wins over component-level styles.
+   :focus-visible (not :focus) means the ring only appears for keyboard nav. */
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible,
+.job-card-v2:focus-visible,
+.list-row-v2:focus-visible,
+.list-row-interactive:focus-visible,
+.users-table-row:focus-visible,
+.nav-item:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Inputs/selects already render their own focus ring — don't double it up. */
+.form-input:focus-visible,
+.pipeline-filter-select:focus-visible {
+  outline: none;
 }
 
 
