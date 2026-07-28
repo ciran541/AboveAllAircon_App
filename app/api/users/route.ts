@@ -1,17 +1,19 @@
 import { NextResponse } from 'next/server'
 import { revalidateTag } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getApiAuthUser } from '@/lib/auth'
 
 // ─── GET /api/users — list all users (admin only) ───────────────────────────
 export async function GET() {
-  // Verify caller is an authenticated admin
-  const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) {
+  // Verify caller is an authenticated admin (this route uses the service-role
+  // client, which bypasses RLS — the role check is the only gate).
+  const caller = await getApiAuthUser()
+  if (!caller) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-
+  if (caller.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   // Use admin client to list all auth users
   const admin = createAdminClient()
@@ -40,13 +42,15 @@ export async function GET() {
 
 // ─── POST /api/users — create a new user (admin only) ───────────────────────
 export async function POST(request: Request) {
-  // Verify caller is an authenticated admin
-  const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) {
+  // Verify caller is an authenticated admin — without this, any authenticated
+  // user could mint themselves an admin account via the service-role client.
+  const caller = await getApiAuthUser()
+  if (!caller) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-
+  if (caller.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const body = await request.json()
   const { email, password, full_name, role: requestedRole } = body

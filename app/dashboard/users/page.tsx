@@ -1,16 +1,13 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCachedStaffProfiles } from '@/lib/staffCache'
+import { requireAdmin } from '@/lib/auth'
 import UsersClient from './UsersClient'
 
 export const dynamic = 'force-dynamic'
 
 export default async function UsersPage() {
-  // Auth check
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  // Admin-only: redirects non-admins away before any user data is fetched.
+  const authUser = await requireAdmin()
 
   // Fetch users via admin client
   const admin = createAdminClient()
@@ -29,5 +26,5 @@ export default async function UsersPage() {
     full_name: profileMap.get(u.id)?.full_name ?? '',
   }))
 
-  return <UsersClient initialUsers={users} currentUserId={user.id} />
+  return <UsersClient initialUsers={users} currentUserId={authUser.id} />
 }

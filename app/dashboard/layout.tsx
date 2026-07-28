@@ -25,7 +25,9 @@ export default async function DashboardLayout({
     .single()
 
   const fullName = profile?.full_name ?? ''
-  const role = (profile?.role as UserRole) ?? 'staff'
+  // Admin-only app: a missing profile row must not silently downgrade a real
+  // user. Explicit role='staff' rows (if reintroduced) are still honored.
+  const role = (profile?.role as UserRole) ?? 'admin'
 
   return (
     <>
