@@ -69,3 +69,16 @@ export async function resolveCalendarConflict(
 ) {
   return JobService.resolveCalendarConflict(jobId, eventType, resolution);
 }
+
+/**
+ * Decides what to do about a calendar event that someone deleted directly in
+ * Google Calendar — put it back, or leave it off. Delegates entirely to
+ * JobService.
+ */
+export async function resolveCalendarRemoval(
+  jobId: string,
+  eventType: "site_visit" | "job" | "second_visit",
+  resolution: "restore" | "keep_off"
+) {
+  return JobService.resolveCalendarRemoval(jobId, eventType, resolution);
+}

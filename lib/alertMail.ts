@@ -34,6 +34,7 @@ const STATE_TEXT: Record<string, string> = {
   missing: "calendar event was deleted",
   cancelled: "calendar event is cancelled",
   time_mismatch: "time differs from Calendar",
+  removed: "deleted from Calendar by hand — decide whether to put it back",
 };
 
 async function postToAppsScript(subject: string, body: string): Promise<void> {

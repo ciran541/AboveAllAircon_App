@@ -316,6 +316,51 @@ export async function resolveCalendarConflict(
 }
 
 /**
+ * Answers the one question the app cannot answer for itself: someone deleted
+ * this slot's event directly in Google Calendar — did they mean it?
+ *
+ * "restore" drops the removal record so the next sync creates a *fresh* event.
+ * The old id is never reused: Google returns a stripped tombstone for a deleted
+ * event and refuses to revive it (403), which is what made this loop forever.
+ *
+ * "keep_off" accepts the deletion. The job keeps its date — that still drives
+ * invoices, reports and the Sheets backup — it simply stays off the calendar,
+ * and reconciliation stops asking.
+ */
+export async function resolveCalendarRemoval(
+  jobId: string,
+  eventType: keyof typeof SLOT_COLUMNS,
+  resolution: "restore" | "keep_off"
+): Promise<{ success?: boolean; error?: string }> {
+  if (!SLOT_COLUMNS[eventType]) return { error: "Unknown calendar slot." };
+  const admin = createAdminClient();
+
+  if (resolution === "keep_off") {
+    const { error } = await admin
+      .from("calendar_slot_removals")
+      .update({ resolution: "kept_off", resolved_at: new Date().toISOString() })
+      .eq("job_id", jobId)
+      .eq("event_type", eventType);
+    if (error) return { error: error.message };
+    invalidateJobCaches();
+    return { success: true };
+  }
+
+  const { error } = await admin
+    .from("calendar_slot_removals")
+    .delete()
+    .eq("job_id", jobId)
+    .eq("event_type", eventType);
+  if (error) return { error: error.message };
+
+  const supabase = await createClient();
+  await supabase.rpc("enqueue_sync", { p_job_id: jobId, p_integration: "calendar" });
+  const { calendarError } = await syncCalendarNow(jobId);
+  invalidateJobCaches();
+  return calendarError ? { error: calendarError } : { success: true };
+}
+
+/**
  * Permanently deletes a job and all its associated Google Calendar events.
  */
 export async function deleteJob(
