@@ -3,27 +3,19 @@
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { resolveCalendarConflict, resolveCalendarRemoval, retrySync } from "@/app/actions/jobActions";
+import { resolveCalendarConflict, retrySync } from "@/app/actions/jobActions";
 
 type ReconciliationIssue = {
   jobId: string;
   customerName: string | null;
   eventType: "site_visit" | "job" | "second_visit";
-  state: "no_event_id" | "missing" | "cancelled" | "time_mismatch" | "removed";
+  state: "no_event_id" | "missing" | "cancelled" | "time_mismatch";
   eventId: string | null;
   expectedStart: string | null;
   actualStart: string | null;
 };
 
 type FailedSync = { jobId: string; integration: string; status: string; error: string | null };
-
-const STATE_COPY: Record<ReconciliationIssue["state"], { label: string; detail: string }> = {
-  no_event_id: { label: "Not on calendar", detail: "This visit is scheduled but has no calendar event yet." },
-  missing: { label: "Event deleted", detail: "The calendar event no longer exists on Google." },
-  cancelled: { label: "Event cancelled", detail: "The event was deleted in Calendar and is invisible there." },
-  time_mismatch: { label: "Time differs", detail: "Calendar and the app disagree on when this is scheduled." },
-  removed: { label: "Deleted in Calendar", detail: "Someone removed this event from Google Calendar by hand." },
-};
 
 type LogRow = {
   id: string;
@@ -113,9 +105,12 @@ export default function LogsClient({
   const [resolving, setResolving] = useState<string | null>(null);
 
   const conflicts = issues.filter((i) => i.state === "time_mismatch");
-  const removed = issues.filter((i) => i.state === "removed");
-  const broken = issues.filter((i) => i.state !== "time_mismatch" && i.state !== "removed");
-  const problemCount = conflicts.length + removed.length + failedSyncs.length;
+  const repaired = issues.filter((i) => i.state === "no_event_id");
+  // Events deleted in Calendar are accepted silently and never appear here. A
+  // `missing`/`cancelled` row means reconciliation couldn't record the removal,
+  // so the slot is neither on the calendar nor settled — that does need a look.
+  const unrecorded = issues.filter((i) => i.state === "missing" || i.state === "cancelled");
+  const problemCount = conflicts.length + unrecorded.length + failedSyncs.length;
 
   const fmt = (iso: string | null) =>
     iso ? new Date(iso).toLocaleString("en-SG", { dateStyle: "medium", timeStyle: "short" }) : "—";
@@ -127,15 +122,6 @@ export default function LogsClient({
     const key = `${issue.jobId}-${issue.eventType}`;
     setResolving(key);
     const result = await resolveCalendarConflict(issue.jobId, issue.eventType, resolution);
-    setResolving(null);
-    if (result?.error) alert("Could not resolve: " + result.error);
-    else router.refresh();
-  };
-
-  const handleRemoval = async (issue: ReconciliationIssue, resolution: "restore" | "keep_off") => {
-    const key = `${issue.jobId}-${issue.eventType}`;
-    setResolving(key);
-    const result = await resolveCalendarRemoval(issue.jobId, issue.eventType, resolution);
     setResolving(null);
     if (result?.error) alert("Could not resolve: " + result.error);
     else router.refresh();
@@ -202,66 +188,24 @@ export default function LogsClient({
               ? "Every scheduled job matches Google Calendar."
               : `${problemCount} item${problemCount === 1 ? "" : "s"} need attention.`}
           </div>
-          {broken.length > 0 && (
+          {repaired.length > 0 && (
             <div style={{ fontSize: 12, color: "#92400e", marginTop: 3 }}>
-              {broken.length} broken event{broken.length === 1 ? " was" : "s were"} found and repaired automatically.
+              {repaired.length} job{repaired.length === 1 ? " was" : "s were"} missing a calendar event and{" "}
+              {repaired.length === 1 ? "was" : "were"} added automatically.
+            </div>
+          )}
+          {unrecorded.length > 0 && (
+            <div style={{ fontSize: 12, color: "#92400e", marginTop: 3 }}>
+              {unrecorded.length} deleted event{unrecorded.length === 1 ? "" : "s"} could not be recorded — the
+              slot{unrecorded.length === 1 ? " is" : "s are"} off the calendar and unsettled.
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Deleted in Calendar: never auto-recreated, or it becomes a zombie ── */}
-      {removed.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <h2 style={{ fontSize: 14, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em", color: "#0f172a", marginBottom: 4 }}>
-            Removed from Google Calendar
-          </h2>
-          <p style={{ fontSize: 12.5, color: "#64748b", margin: "0 0 12px 0" }}>
-            Someone deleted these events in Google Calendar. The app won't put them back on its own — if the job
-            was cancelled, recreating it would just make the event reappear every time it's deleted. These jobs are
-            still scheduled in the app but <strong>are not on anyone's calendar</strong>.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {removed.map((issue) => {
-              const key = `${issue.jobId}-${issue.eventType}`;
-              const busy = resolving === key;
-              return (
-                <div key={key} style={{ background: "#fff", border: "1px solid #fecaca", borderRadius: 12, padding: "14px 18px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
-                    <div style={{ minWidth: 0 }}>
-                      <Link href={`/dashboard/jobs/${issue.jobId}`} style={{ fontSize: 14, fontWeight: 700, color: "#2563eb", textDecoration: "none" }}>
-                        {issue.customerName ?? issue.jobId.slice(0, 8)}
-                      </Link>
-                      <span style={{ fontSize: 12, color: "#64748b" }}> · {TYPE_LABELS[issue.eventType] ?? issue.eventType}</span>
-                      <div style={{ fontSize: 12.5, color: "#475569", marginTop: 6 }}>
-                        App still has this scheduled for <strong>{fmt(issue.expectedStart)}</strong>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => handleRemoval(issue, "restore")}
-                        style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "#0f172a", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", whiteSpace: "nowrap" }}
-                      >
-                        {busy ? "Working…" : "Put it back"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => handleRemoval(issue, "keep_off")}
-                        style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#fff", color: "#475569", fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer", whiteSpace: "nowrap" }}
-                      >
-                        Keep it off
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Events deleted in Calendar are taken at face value — accepted, logged,
+          and left off for good. Nothing to show here, and nothing to decide;
+          "Put it back" lives on the job page for the rare mistake. */}
 
       {/* ── Conflicts: deliberately NOT auto-fixed, a human has to choose ── */}
       {conflicts.length > 0 && (

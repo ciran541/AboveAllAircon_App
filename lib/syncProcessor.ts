@@ -274,7 +274,7 @@ export async function syncCalendarNow(jobId: string): Promise<{
 }
 
 /** What's wrong with one job slot, from Google's point of view. */
-export type SlotState = "no_event_id" | "missing" | "cancelled" | "time_mismatch" | "removed";
+export type SlotState = "no_event_id" | "missing" | "cancelled" | "time_mismatch";
 
 export type ReconciliationIssue = {
   jobId: string;
@@ -291,12 +291,17 @@ export type ReconciliationIssue = {
  *
  * Only `no_event_id` qualifies: it means the app never created the event, so
  * there is no human action to contradict. `missing` and `cancelled` both mean
- * somebody deleted something, and Google's tombstone records no intent — those
- * become `removed` and wait for a person.
+ * somebody deleted the event, which this app treats as the decision it looks
+ * like — see DELETED_STATES.
  */
 const AUTO_HEAL_STATES: SlotState[] = ["no_event_id"];
 
-/** Deletions done outside the app, which the app must not silently undo. */
+/**
+ * Deletions done outside the app. Deleting the event in Calendar *is* how
+ * someone says the job is off, so these are accepted silently and permanently:
+ * recorded, the dead event id cleared, and never recreated or reported as a
+ * problem. Putting one back is a deliberate act on the job page.
+ */
 const DELETED_STATES: SlotState[] = ["missing", "cancelled"];
 
 /**
@@ -311,13 +316,16 @@ const DELETED_STATES: SlotState[] = ["missing", "cancelled"];
  *
  * Healing policy (deliberate): only slots the app never put on the calendar
  * are repaired automatically. Anything a person did directly in Calendar is
- * reported, never overwritten — dragging an event to a new time is a
- * legitimate reschedule, and deleting one is a legitimate cancellation. Undoing
- * either would be the same class of bug as resetting a manually changed colour,
- * except worse: a recreated event gets deleted and recreated forever.
+ * never overwritten — dragging an event to a new time is a legitimate
+ * reschedule, and deleting one is a legitimate cancellation. Undoing either
+ * would be the same class of bug as resetting a manually changed colour, except
+ * worse: a recreated event gets deleted and recreated forever.
  *
- * A deletion is recorded (calendar_slot_removals), the dead event id is cleared
- * so nothing retries it, and the slot waits for a decision on the logs page.
+ * A reschedule is reported, because only a person can say which time is right.
+ * A deletion is not: it is recorded as accepted (calendar_slot_removals), the
+ * dead event id is cleared so nothing retries it, and the slot is left off the
+ * calendar for good. It is not surfaced as a problem — there is nothing to
+ * decide. Putting the event back is a deliberate act on the job page.
  */
 export async function reconcileCalendar(
   admin: AdminClient,
@@ -364,21 +372,21 @@ export async function reconcileCalendar(
 
       const expectedStart = expectedEventStart(slot.date, slot.time ?? null);
 
-      // Already known to have been deleted by hand. Decided removals are
-      // silent; undecided ones surface as a question, and neither re-checks
-      // Google — the event id is gone, there is nothing left to look up.
+      // Already known to have been deleted by hand: intentionally off the
+      // calendar, so it is skipped in silence. Google isn't re-checked either —
+      // the event id is gone, there is nothing left to look up.
       const removal = removals.get(`${job.id}:${slot.type}`);
       if (removalApplies(removal, slot.date)) {
-        if (removal!.resolution === "kept_off") continue;
-        issues.push({
-          jobId: job.id,
-          customerName: customer?.name ?? null,
-          eventType: slot.type,
-          state: "removed",
-          eventId: removal!.event_id,
-          expectedStart,
-          actualStart: null,
-        });
+        // Rows recorded before deletions became self-resolving still say
+        // "awaiting a decision". Nothing is waiting on one now, so settle them
+        // rather than leaving the table contradicting the behaviour.
+        if (removal!.resolution !== "kept_off") {
+          await admin
+            .from("calendar_slot_removals")
+            .update({ resolution: "kept_off", resolved_at: new Date().toISOString() })
+            .eq("job_id", job.id)
+            .eq("event_type", slot.type);
+        }
         continue;
       }
 
@@ -388,7 +396,7 @@ export async function reconcileCalendar(
       if (!slot.eventId) {
         state = "no_event_id";
       } else {
-        let event = listed.get(slot.eventId);
+        const event = listed.get(slot.eventId);
         if (!event) {
           // Absent from the listing isn't proof of anything: it may have been
           // purged, or moved outside the window. Confirm directly before
@@ -416,20 +424,22 @@ export async function reconcileCalendar(
 
       if (!state) continue;
 
-      // First sighting of a hand-deleted event. Record it, clear the dead id so
-      // no save or heal ever PATCHes it again (Google answers 200 with a
-      // stripped tombstone for these, so neither the 404/410 recreate path nor
-      // a status check can tell it apart from a live event), and ask a human.
+      // First sighting of a hand-deleted event. Accept it: record the removal
+      // as settled, and clear the dead id so no save or heal ever PATCHes it
+      // again (Google answers 200 with a stripped tombstone for these, so
+      // neither the 404/410 recreate path nor a status check can tell it apart
+      // from a live event — PATCHing one silently un-deletes it).
       if (DELETED_STATES.includes(state)) {
+        const nowIso = new Date().toISOString();
         const { error: removalError } = await admin.from("calendar_slot_removals").upsert(
           {
             job_id: job.id,
             event_type: slot.type,
             event_id: slot.eventId,
             slot_date: slot.date,
-            detected_at: new Date().toISOString(),
-            resolution: null,
-            resolved_at: null,
+            detected_at: nowIso,
+            resolution: "kept_off",
+            resolved_at: nowIso,
           },
           { onConflict: "job_id,event_type" }
         );
@@ -460,17 +470,12 @@ export async function reconcileCalendar(
           success: true,
           error:
             `Event was deleted in Google Calendar (${state}) by someone outside this app. ` +
-            `Left off the calendar pending a decision — not recreated.`,
+            `Treated as intentional: left off the calendar permanently, not recreated. ` +
+            `Put it back from the job page if that was a mistake.`,
         });
-        issues.push({
-          jobId: job.id,
-          customerName: customer?.name ?? null,
-          eventType: slot.type,
-          state: "removed",
-          eventId: slot.eventId ?? null,
-          expectedStart,
-          actualStart,
-        });
+        // Deliberately not reported as an issue: the deletion was the decision,
+        // so there is nothing for anyone to act on. The audit line above is the
+        // record, and the job page shows the slot as off the calendar.
         continue;
       }
 

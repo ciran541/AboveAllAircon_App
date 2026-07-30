@@ -7,12 +7,17 @@
 -- that reappears every time it's deleted — the same class of bug as overwriting
 -- a manual reschedule, which reconcileCalendar already refuses to do.
 --
--- Google's tombstone for a deleted event carries no creator, no organizer and
--- no reason, so intent cannot be recovered from the API. It takes one human
--- decision per removal, and this table is where that decision lives.
+-- A deletion is therefore taken at face value: the slot is recorded here, its
+-- dead event id is cleared off the job, and it stays off the calendar for good.
+-- Nothing asks about it and nothing alerts on it — the deletion was the
+-- decision. The job page shows the slot as off the calendar and offers a
+-- deliberate "put it back" for the rare mistake, which creates a *fresh* event
+-- (Google returns a stripped tombstone for a deleted event and refuses to
+-- revive it, answering 403 — which is what made the old loop endless).
 --
--- resolution null      → pending: awaiting a decision, shown on the logs page
--- resolution 'kept_off' → decided: stay off the calendar, stop asking
+-- resolution 'kept_off' → the only steady state: recorded, accepted, stays off
+-- resolution null       → transitional only; rows predating self-resolving
+--                         removals, settled on the next reconciliation pass
 
 create table public.calendar_slot_removals (
   id          uuid primary key default gen_random_uuid(),
@@ -31,6 +36,9 @@ create table public.calendar_slot_removals (
   unique (job_id, event_type)
 );
 
+-- Vestigial: kept because this migration has already run in production and the
+-- index is free to maintain (its predicate matches almost nothing now that
+-- removals resolve themselves). Do not build anything on "pending" removals.
 create index idx_calendar_slot_removals_pending
   on public.calendar_slot_removals(detected_at desc)
   where resolution is null;

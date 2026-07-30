@@ -316,16 +316,19 @@ export async function resolveCalendarConflict(
 }
 
 /**
- * Answers the one question the app cannot answer for itself: someone deleted
- * this slot's event directly in Google Calendar — did they mean it?
+ * Reverses, or re-affirms, the app's reading of a hand-deleted event.
  *
- * "restore" drops the removal record so the next sync creates a *fresh* event.
- * The old id is never reused: Google returns a stripped tombstone for a deleted
- * event and refuses to revive it (403), which is what made this loop forever.
+ * Deleting the event in Calendar is taken at face value — reconciliation
+ * records it and leaves the slot off the calendar for good, no questions asked.
+ * The job keeps its date, which still drives invoices, reports and the Sheets
+ * backup; it simply isn't on anyone's calendar.
  *
- * "keep_off" accepts the deletion. The job keeps its date — that still drives
- * invoices, reports and the Sheets backup — it simply stays off the calendar,
- * and reconciliation stops asking.
+ * "restore" is the deliberate undo for a deletion that was a mistake: it drops
+ * the removal record so the next sync creates a *fresh* event. The old id is
+ * never reused — Google returns a stripped tombstone for a deleted event and
+ * refuses to revive it (403), which is what made this loop forever.
+ *
+ * "keep_off" just settles the record; it is what reconciliation already did.
  */
 export async function resolveCalendarRemoval(
   jobId: string,

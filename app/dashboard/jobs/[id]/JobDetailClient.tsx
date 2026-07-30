@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import InvoicePreviewModal from "@/components/InvoicePreviewModal";
 import { SiteVisitModal, QuotationModal, WhatsAppTemplateModal, ConfirmJobModal, SecondVisitModal, CompleteJobModal } from "@/components/StageModals";
-import { updateJobFields, deleteJob as deleteJobAction, updateJobStage, retrySync, getJobSyncStatus } from "@/app/actions/jobActions";
+import { updateJobFields, deleteJob as deleteJobAction, updateJobStage, retrySync, getJobSyncStatus, resolveCalendarRemoval } from "@/app/actions/jobActions";
 import { logJobMaterial, removeJobMaterial } from "@/app/actions/inventoryActions";
 import { updateCustomerDetails } from "@/app/actions/customerActions";
 import { JOB_STAGES as STAGES, getStageDisplay, getStageDB, UNIT_TYPES, LEAD_SOURCES, getSourceDisplay } from "@/lib/constants";
@@ -23,6 +23,17 @@ const SYNC_LABELS: Record<string, string> = {
   calendar: "Google Calendar sync",
   sheets: "Sheets backup sync",
   meta_lead: "Meta lead sync",
+};
+
+/**
+ * A slot that is off the calendar on purpose: someone deleted its event in
+ * Google Calendar, and the app took that as the decision rather than putting it
+ * back. Only shown while it still applies to the slot's current date.
+ */
+type CalendarRemoval = {
+  eventType: "site_visit" | "job" | "second_visit";
+  slotDate: string;
+  detectedAt: string;
 };
 
 type TimelineEntry =
@@ -115,12 +126,14 @@ export default function JobDetailClient({
   staffProfiles,
   initialSyncIssues,
   initialTimeline = [],
+  initialCalendarRemovals = [],
 }: {
   initialJob: any;
   initialMaterials: any[];
   staffProfiles: any[];
   initialSyncIssues: { id: string; integration: string; status: string; last_error: string | null }[];
   initialTimeline?: TimelineEntry[];
+  initialCalendarRemovals?: CalendarRemoval[];
 }) {
   const [job, setJob] = useState(initialJob);
   const [materials, setMaterials] = useState(initialMaterials);
@@ -129,6 +142,8 @@ export default function JobDetailClient({
   const [syncIssues, setSyncIssues] = useState(initialSyncIssues);
   const [retryingSync, setRetryingSync] = useState<string | null>(null);
   const [calendarPending, setCalendarPending] = useState(false);
+  const [calendarRemovals, setCalendarRemovals] = useState(initialCalendarRemovals);
+  const [restoringSlot, setRestoringSlot] = useState<string | null>(null);
   const [showCRMPanel, setShowCRMPanel] = useState(false);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -221,6 +236,24 @@ export default function JobDetailClient({
         }
       }, 3500);
     }
+  };
+
+  /**
+   * Undoes an accepted deletion. Deliberately manual and one-way: the daily
+   * check will never put a hand-deleted event back by itself, so this is the
+   * only way one returns — as a brand new event, since Google refuses to revive
+   * a deleted one.
+   */
+  const handleRestoreSlot = async (removal: CalendarRemoval) => {
+    setRestoringSlot(removal.eventType);
+    const result = await resolveCalendarRemoval(job.id, removal.eventType, "restore");
+    setRestoringSlot(null);
+    if (result?.error) {
+      alert("Could not put it back: " + result.error);
+      return;
+    }
+    setCalendarRemovals((prev) => prev.filter((r) => r.eventType !== removal.eventType));
+    router.refresh();
   };
 
   // ── Sync retry (Calendar / Sheets / Meta-lead) ──────────────
@@ -505,6 +538,45 @@ export default function JobDetailClient({
             </button>
           </div>
         ))}
+
+        {/* ── OFF THE CALENDAR ON PURPOSE ──
+            Someone deleted the event in Google Calendar, so the app left it
+            off. Nothing else surfaces this — no alert email, nothing on the
+            Sync Log — because the deletion was the decision, not a fault. But
+            the job still has a date, so without this the job would look
+            scheduled while nobody has it on their calendar. */}
+        {calendarRemovals.map((removal) => {
+          const busy = restoringSlot === removal.eventType;
+          const slotLabel = CALENDAR_SLOT_LABELS[removal.eventType] ?? removal.eventType;
+          return (
+            <div
+              key={removal.eventType}
+              style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}
+            >
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <span style={{ fontSize: 20, lineHeight: 1 }}>🚫</span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+                    {slotLabel} is not on Google Calendar
+                  </div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                    The event was deleted in Calendar on{" "}
+                    {new Date(removal.detectedAt).toLocaleDateString("en-SG", { dateStyle: "medium" })}, so the app
+                    left it off. The job is still scheduled for {removal.slotDate} here.
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleRestoreSlot(removal)}
+                disabled={busy}
+                style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #cbd5e1", background: "#fff", color: "#0f172a", fontWeight: 700, fontSize: 13, cursor: busy ? "default" : "pointer", whiteSpace: "nowrap" }}
+              >
+                {busy ? "Adding…" : "Put it back"}
+              </button>
+            </div>
+          );
+        })}
 
         {/* Calendar sync outlasted the inline wait — it's still running in the
             background, so say so rather than implying silent success. */}

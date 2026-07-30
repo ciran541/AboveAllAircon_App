@@ -57,6 +57,15 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     .order('created_at', { ascending: false })
     .limit(50);
 
+  // Slots deliberately off the calendar because someone deleted the event in
+  // Google Calendar. Nothing warns about these anywhere else by design, so the
+  // job itself has to say so — otherwise a job looks scheduled while no one has
+  // it on their calendar.
+  const removalsPromise = adminClient
+    .from('calendar_slot_removals')
+    .select('event_type, event_id, slot_date, detected_at')
+    .eq('job_id', id);
+
   // 2. Await them all at once (huge latency drop)
   const [
     { data: authData },
@@ -65,7 +74,8 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     staffProfiles,
     { data: syncIssues },
     { data: activity },
-    { data: calendarLog }
+    { data: calendarLog },
+    { data: slotRemovals }
   ] = await Promise.all([
     userPromise,
     jobPromise,
@@ -74,6 +84,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     syncIssuesPromise,
     activityPromise,
     calendarLogPromise,
+    removalsPromise,
   ]);
 
   if (error || !job) {
@@ -100,6 +111,26 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     const p: any = staffProfiles?.find((s: any) => s.id === actorId);
     return p?.full_name || p?.name || null;
   };
+
+  // A removal only speaks for the date it was recorded against — the same rule
+  // reconciliation uses (removalApplies in lib/syncProcessor.ts). If the slot
+  // has since been rescheduled or cleared, the slot is syncing normally again
+  // and there is nothing to report.
+  const SLOT_DATE_COLUMN: Record<string, string> = {
+    site_visit: 'visit_date',
+    job: 'job_date',
+    second_visit: 'second_visit_date',
+  };
+  const activeRemovals = (slotRemovals ?? [])
+    .filter((r: any) => {
+      const dateColumn = SLOT_DATE_COLUMN[r.event_type];
+      return dateColumn && r.slot_date && (job as any)[dateColumn] === r.slot_date;
+    })
+    .map((r: any) => ({
+      eventType: r.event_type as 'site_visit' | 'job' | 'second_visit',
+      slotDate: r.slot_date as string,
+      detectedAt: r.detected_at as string,
+    }));
 
   const timeline = [
     ...(activity ?? []).map((a: any) => ({
@@ -141,6 +172,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         staffProfiles={staffProfiles || []}
         initialSyncIssues={syncIssues || []}
         initialTimeline={timeline}
+        initialCalendarRemovals={activeRemovals}
       />
     </div>
   )
