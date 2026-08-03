@@ -7,6 +7,8 @@ type Customer = {
   name: string;
   phone: string | null;
   address: string | null;
+  /** BTO | Resale | Condo | Landed | Commercial — see customers.unit_type. */
+  unit_type?: string | null;
 };
 
 export type CalendarEventType = "site_visit" | "job" | "second_visit";
@@ -42,10 +44,10 @@ const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CALENDAR_API_BASE = "https://www.googleapis.com/calendar/v3";
 
-const EVENT_CONFIG: Record<CalendarEventType, { prefix: string; colorId: string }> = {
-  site_visit: { prefix: "[Site Visit]", colorId: "3" },   // purple (grape)
-  job: { prefix: "[Job]", colorId: "8" },   // grey (graphite)
-  second_visit: { prefix: "[2nd Visit]", colorId: "8" },   // grey (graphite)
+const EVENT_CONFIG: Record<CalendarEventType, { label: string; colorId: string }> = {
+  site_visit: { label: "Site Visit", colorId: "3" },   // purple (grape)
+  job: { label: "Job", colorId: "8" },   // grey (graphite)
+  second_visit: { label: "2nd Visit", colorId: "8" },   // grey (graphite)
 };
 
 // ── Retry helper ──────────────────────────────────────────────────────────────
@@ -216,13 +218,21 @@ function buildEventPayload(params: UpsertParams): CalendarEventPayload {
   const customerPhone = params.job.customers?.phone || "N/A";
   const customerAddress = params.job.customers?.address || "N/A";
   const jobNotes = params.job.notes?.trim() || "No notes";
+  // Unit type rides in the title tag rather than only the description: it's how
+  // manpower gets allocated to a slot, and mobile Calendar truncates the title
+  // long before the address ends, so anything after it wouldn't be readable
+  // from the agenda view. Omitted entirely when unset, so the tag never reads
+  // as a real answer when nobody has recorded one.
+  const unitType = params.job.customers?.unit_type?.trim() || null;
+  const prefix = `[${unitType ? `${config.label} · ${unitType}` : config.label}]`;
 
   return {
-    summary: `${config.prefix} ${customerAddress} | ${customerPhone}`,
+    summary: `${prefix} ${customerAddress} | ${customerPhone}`,
     description: [
       `Customer: ${customerName}`,
       `Phone: ${customerPhone}`,
       `Address: ${customerAddress}`,
+      `Unit type: ${unitType ?? "Not specified"}`,
       `Notes: ${jobNotes}`,
     ].join("\n"),
     // Always force the event back to confirmed. If someone manually deletes

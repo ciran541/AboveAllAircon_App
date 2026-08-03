@@ -25,7 +25,7 @@ export const CALENDAR_JOB_FIELDS = [
 ] as const;
 
 /** Customer columns embedded in a Calendar event's summary/description. */
-export const CALENDAR_CUSTOMER_FIELDS = ["name", "phone", "address"] as const;
+export const CALENDAR_CUSTOMER_FIELDS = ["name", "phone", "address", "unit_type"] as const;
 
 /**
  * Never diff these. The sync processor writes the *_event_id columns back

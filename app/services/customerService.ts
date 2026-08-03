@@ -96,7 +96,7 @@ export async function saveCustomer(
   if (formData.id) {
     const { data: before } = await supabase
       .from("customers")
-      .select("name, phone, address")
+      .select("name, phone, address, unit_type")
       .eq("id", formData.id)
       .single();
 
@@ -145,7 +145,7 @@ export async function updateCustomer(
 
   const { data: before } = await supabase
     .from("customers")
-    .select("name, phone, address")
+    .select("name, phone, address, unit_type")
     .eq("id", customerId)
     .single();
 

@@ -513,3 +513,183 @@ export async function saveJob(
     return { error: err.message };
   }
 }
+
+// ── Pipeline board reads ──────────────────────────────────────────────────────
+
+/**
+ * Projected columns for a board/list card. Kept narrow deliberately — this
+ * table is wide and holds several long text fields.
+ * Keep in sync with the Job type in app/dashboard/jobs/JobsClient.tsx.
+ */
+export const JOB_BOARD_SELECT = [
+  "id", "created_by", "assigned_to", "stage", "customer_id",
+  "service_type", "ac_brand", "unit_count",
+  "visit_date", "visit_time", "visit_phone",
+  "job_date", "job_time",
+  "second_visit_date", "second_visit_time",
+  "payment_status", "notes", "labor_cost", "quoted_amount", "material_cost",
+  "priority", "source", "service_report_no", "internal_notes",
+  "quoted_date", "expiry_date", "status", "loss_reason", "closed_at",
+  "created_at", "deposit_amount", "deposit_collected",
+  "cv_redeemed", "cv_amount", "final_payment_collected",
+  "quotation_breakdown", "quotation_materials", "quotation_warranty",
+  "engineer_name", "visit_event_id", "job_event_id", "second_visit_event_id",
+  "customers(id,name,phone,address,unit_type)",
+].join(",");
+
+/** Cards fetched per lane, per page. */
+export const BOARD_PAGE_SIZE = 10;
+
+/** The lanes the board loads, in pipeline order, as DB stage values. */
+export const BOARD_STAGES = [
+  "Site Visit Scheduled",
+  "Quotation Sent",
+  "Job Scheduled",
+  "In Progress",
+  "Second Visit",
+  "Job Done (Payment Pending)",
+  "Completed",
+];
+
+export interface BoardFilters {
+  q: string;
+  service: string;
+  source: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
+export interface StagePage {
+  jobs: any[];
+  /** Rows matching the filters in this lane, ignoring the page window. */
+  total: number;
+}
+
+/**
+ * Customers matching a free-text search. Job search spans two tables, and
+ * PostgREST cannot OR across an embedded resource, so the customer ids are
+ * resolved first and folded into the job query as an `in` clause.
+ */
+async function matchingCustomerIds(supabase: SupabaseClient, q: string): Promise<string[]> {
+  if (!q) return [];
+  const { data } = await supabase
+    .from("customers")
+    .select("id")
+    .or(`name.ilike.%${q}%,phone.ilike.%${q}%,address.ilike.%${q}%`)
+    .limit(200);
+  return (data ?? []).map((c: any) => c.id);
+}
+
+/**
+ * Applies the board's filters to a query. The stage is never applied here —
+ * every board query is already scoped to a single lane.
+ */
+function applyBoardFilters(query: any, filters: BoardFilters, customerIds: string[]) {
+  const { q, service, source, dateFrom, dateTo } = filters;
+
+  if (service && service !== "All") query = query.eq("service_type", service);
+  if (source && source !== "All") query = query.eq("source", source);
+
+  if (q) {
+    const orParts = [
+      `ac_brand.ilike.%${q}%`,
+      `service_report_no.ilike.%${q}%`,
+      `notes.ilike.%${q}%`,
+      `visit_phone.ilike.%${q}%`,
+    ];
+    if (customerIds.length > 0) orParts.push(`customer_id.in.(${customerIds.join(",")})`);
+    query = query.or(orParts.join(","));
+  }
+
+  // Matches jobs where ANY of the three slot dates falls in the range.
+  if (dateFrom && dateTo) {
+    query = query.or(
+      `and(visit_date.gte.${dateFrom},visit_date.lte.${dateTo}),` +
+        `and(job_date.gte.${dateFrom},job_date.lte.${dateTo}),` +
+        `and(second_visit_date.gte.${dateFrom},second_visit_date.lte.${dateTo})`
+    );
+  } else if (dateFrom) {
+    query = query.or(
+      `visit_date.gte.${dateFrom},job_date.gte.${dateFrom},second_visit_date.gte.${dateFrom}`
+    );
+  } else if (dateTo) {
+    query = query.or(
+      `visit_date.lte.${dateTo},job_date.lte.${dateTo},second_visit_date.lte.${dateTo}`
+    );
+  }
+
+  return query;
+}
+
+/** One lane's page of cards, plus how many rows that lane really holds. */
+async function fetchStagePage(
+  supabase: SupabaseClient,
+  stage: string,
+  offset: number,
+  limit: number,
+  filters: BoardFilters,
+  customerIds: string[]
+): Promise<StagePage> {
+  const query = applyBoardFilters(
+    supabase
+      .from("jobs")
+      .select(JOB_BOARD_SELECT, { count: "exact" })
+      .eq("stage", stage)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(offset, offset + limit - 1),
+    filters,
+    customerIds
+  );
+
+  const { data, count, error } = await query;
+  if (error) throw new Error(error.message);
+  return { jobs: data ?? [], total: count ?? 0 };
+}
+
+/**
+ * The board's initial load: the first page of every visible lane, in parallel.
+ *
+ * One query per lane rather than a single wide fetch. The old approach pulled
+ * up to 300 rows in one go and sliced them per lane in the browser, so the
+ * per-lane cap saved nothing on the wire — every card in every lane was
+ * downloaded whether or not it was ever scrolled to.
+ */
+export async function fetchBoardColumns(
+  stages: string[],
+  filters: BoardFilters,
+  limit: number = BOARD_PAGE_SIZE
+): Promise<Record<string, StagePage>> {
+  const supabase = await createClient();
+  const customerIds = await matchingCustomerIds(supabase, filters.q);
+
+  const pages = await Promise.all(
+    stages.map((stage) => fetchStagePage(supabase, stage, 0, limit, filters, customerIds))
+  );
+
+  const columns: Record<string, StagePage> = {};
+  stages.forEach((stage, index) => {
+    columns[stage] = pages[index];
+  });
+  return columns;
+}
+
+/**
+ * The next page for a single lane, for "Load more". Filters must match the
+ * ones the initial load used or the offset walks a different result set.
+ */
+export async function fetchStageJobs(
+  stage: string,
+  offset: number,
+  filters: BoardFilters,
+  limit: number = BOARD_PAGE_SIZE
+): Promise<{ jobs?: any[]; total?: number; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const customerIds = await matchingCustomerIds(supabase, filters.q);
+    const page = await fetchStagePage(supabase, stage, offset, limit, filters, customerIds);
+    return { jobs: page.jobs, total: page.total };
+  } catch (err: any) {
+    return { error: err.message };
+  }
+}
