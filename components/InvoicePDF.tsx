@@ -396,20 +396,23 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
             </View>
 
             <View style={{ flexDirection: 'column' }}>
-              {/* Row 1 */}
-              <View style={styles.tableRow}>
-                <View style={styles.tdNo}>
-                  <Text>1</Text>
+              {/* Row 1 — a quotation lists only the unit lines, so the labor,
+                  supply and brand rows below are invoice/receipt only. */}
+              {!data.isQuotation && (
+                <View style={styles.tableRow}>
+                  <View style={styles.tdNo}>
+                    <Text>1</Text>
+                  </View>
+                  <View style={[styles.tdDesc, { paddingBottom: 0 }]}>
+                    <Text style={styles.descItem}>{keepIndent(data.laborDesc)}</Text>
+                  </View>
+                  <View style={styles.tdQty} />
+                  <View style={styles.tdAmt} />
                 </View>
-                <View style={[styles.tdDesc, { paddingBottom: 0 }]}>
-                  <Text style={styles.descItem}>{keepIndent(data.laborDesc)}</Text>
-                </View>
-                <View style={styles.tdQty} />
-                <View style={styles.tdAmt} />
-              </View>
+              )}
 
               {/* Row 2.1: Supply */}
-              {!data.hideSupplyDesc && (
+              {!data.isQuotation && !data.hideSupplyDesc && (
                 <View style={styles.tableRow}>
                   <View style={[styles.tdNo, { paddingTop: 7 }]}>
                     <Text>2</Text>
@@ -423,21 +426,26 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
               )}
 
               {/* Row 2.2: Brand */}
-              <View style={styles.tableRow}>
-                <View style={[styles.tdNo, { paddingTop: data.hideSupplyDesc ? 7 : 0 }]}>
-                  {data.hideSupplyDesc && <Text>2</Text>}
+              {!data.isQuotation && (
+                <View style={styles.tableRow}>
+                  <View style={[styles.tdNo, { paddingTop: data.hideSupplyDesc ? 7 : 0 }]}>
+                    {data.hideSupplyDesc && <Text>2</Text>}
+                  </View>
+                  <View style={[styles.tdDesc, { paddingTop: data.hideSupplyDesc ? 7 : 4, paddingBottom: 0 }]}>
+                    <Text style={styles.descBold}>{keepIndent(data.brandHeading)}</Text>
+                  </View>
+                  <View style={styles.tdQty} />
+                  <View style={styles.tdAmt} />
                 </View>
-                <View style={[styles.tdDesc, { paddingTop: data.hideSupplyDesc ? 7 : 4, paddingBottom: 0 }]}>
-                  <Text style={styles.descBold}>{keepIndent(data.brandHeading)}</Text>
-                </View>
-                <View style={styles.tdQty} />
-                <View style={styles.tdAmt} />
-              </View>
+              )}
 
-              {/* Row 2.3: Units & QTY & AMT */}
+              {/* Row 2.3: Units & QTY & AMT — numbered itself on a quotation,
+                  where nothing precedes it. */}
               <View style={styles.tableRow}>
-                <View style={styles.tdNo} />
-                <View style={[styles.tdDesc, { paddingTop: 4, paddingBottom: 0 }]}>
+                <View style={[styles.tdNo, { paddingTop: data.isQuotation ? 7 : 0 }]}>
+                  {data.isQuotation && <Text>1</Text>}
+                </View>
+                <View style={[styles.tdDesc, { paddingTop: data.isQuotation ? 7 : 4, paddingBottom: 0 }]}>
                   {data.units.map((u, i) => (
                     u.trim()
                       ? <Text key={i} style={styles.descBold}>{keepIndent(u)}</Text>

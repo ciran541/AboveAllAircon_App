@@ -35,6 +35,7 @@ export default function JobModal({
       unit_count: 1,
       visit_date: "",
       job_date: "",
+      job_time: "",
       payment_status: "Pending",
       notes: "",
       assigned_to: "",
@@ -48,6 +49,21 @@ export default function JobModal({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Not every job starts with a site visit — a direct installation skips
+  // straight to the install date. For an existing job we infer it from the
+  // job already having no visit on record.
+  const [skipVisit, setSkipVisit] = useState(isNew ? false : !job!.visit_date);
+
+  const toggleSkipVisit = (skip: boolean) => {
+    setSkipVisit(skip);
+    setFormData((prev) => ({
+      ...prev,
+      ...(skip
+        ? { visit_date: "", visit_time: "", ...(isNew ? { stage: "Job Scheduled" } : {}) }
+        : { job_date: "", job_time: "", ...(isNew ? { stage: "Site Visit Scheduled" } : {}) }),
+    }));
+  };
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   // For new jobs — default to new customer form
@@ -119,6 +135,7 @@ export default function JobModal({
     if (!dataToSave.visit_date) dataToSave.visit_date = null;
     if (!dataToSave.job_date) dataToSave.job_date = null;
     if (!dataToSave.visit_time) dataToSave.visit_time = null;
+    if (!dataToSave.job_time) dataToSave.job_time = null;
     if (!dataToSave.assigned_to) dataToSave.assigned_to = null;
     if (!dataToSave.unit_count) dataToSave.unit_count = 1;
     if (!dataToSave.quoted_amount) dataToSave.quoted_amount = 0;
@@ -286,17 +303,60 @@ export default function JobModal({
 
             {/* ── Visit Schedule ── */}
             <div style={{ padding: "24px", background: "#f8fafc", borderRadius: 20, border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 16 }}>
-              <label style={{ fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>Visit Schedule</label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                <div className="form-group">
-                  <label className="form-label">Visit Date *</label>
-                  <input type="date" required className="form-input" value={formData.visit_date || ""} onChange={(e) => setFormData({ ...formData, visit_date: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Visit Time *</label>
-                  <TimePicker value={formData.visit_time || ""} onChange={(val) => setFormData({ ...formData, visit_time: val })} />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  {skipVisit ? "Installation Schedule" : "Visit Schedule"}
+                </label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => toggleSkipVisit(false)}
+                    style={{
+                      fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 8, border: "none", cursor: "pointer", transition: "all 0.2s",
+                      background: !skipVisit ? "#0f172a" : "#e2e8f0",
+                      color: !skipVisit ? "#fff" : "#64748b",
+                    }}
+                  >Site Visit</button>
+                  <button
+                    type="button"
+                    onClick={() => toggleSkipVisit(true)}
+                    style={{
+                      fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 8, border: "none", cursor: "pointer", transition: "all 0.2s",
+                      background: skipVisit ? "#0f172a" : "#e2e8f0",
+                      color: skipVisit ? "#fff" : "#64748b",
+                    }}
+                  >Skip — Direct Installation</button>
                 </div>
               </div>
+
+              {skipVisit ? (
+                <>
+                  <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>
+                    No site visit for this job.{isNew ? " It starts at Job Scheduled in the pipeline." : ""} Leave the date blank if it isn't confirmed yet.
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                    <div className="form-group">
+                      <label className="form-label">Installation Date</label>
+                      <input type="date" className="form-input" value={formData.job_date || ""} onChange={(e) => setFormData({ ...formData, job_date: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Installation Time</label>
+                      <TimePicker value={formData.job_time || ""} onChange={(val) => setFormData({ ...formData, job_time: val })} />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <div className="form-group">
+                    <label className="form-label">Visit Date *</label>
+                    <input type="date" required className="form-input" value={formData.visit_date || ""} onChange={(e) => setFormData({ ...formData, visit_date: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Visit Time *</label>
+                    <TimePicker value={formData.visit_time || ""} onChange={(val) => setFormData({ ...formData, visit_time: val })} />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* ── Assignment & Financials (Hidden) ── */}
