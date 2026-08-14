@@ -51,8 +51,8 @@ export default function JobModal({
   const [error, setError] = useState<string | null>(null);
 
   // Not every job starts with a site visit — a direct installation skips
-  // straight to the install date. For an existing job we infer it from the
-  // job already having no visit on record.
+  // straight to quoting. For an existing job we infer it from the job
+  // already having no visit on record.
   const [skipVisit, setSkipVisit] = useState(isNew ? false : !job!.visit_date);
 
   const toggleSkipVisit = (skip: boolean) => {
@@ -60,7 +60,7 @@ export default function JobModal({
     setFormData((prev) => ({
       ...prev,
       ...(skip
-        ? { visit_date: "", visit_time: "", ...(isNew ? { stage: "Job Scheduled" } : {}) }
+        ? { visit_date: "", visit_time: "", ...(isNew ? { stage: "Quotation Sent" } : {}) }
         : { job_date: "", job_time: "", ...(isNew ? { stage: "Site Visit Scheduled" } : {}) }),
     }));
   };
@@ -332,7 +332,7 @@ export default function JobModal({
               {skipVisit ? (
                 <>
                   <div style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>
-                    No site visit for this job.{isNew ? " It starts at Job Scheduled in the pipeline." : ""} Leave the date blank if it isn't confirmed yet.
+                    No site visit for this job.{isNew ? " It starts at Quotation Sent so you can quote straight away." : ""} Leave the installation date blank if it isn't confirmed yet.
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                     <div className="form-group">

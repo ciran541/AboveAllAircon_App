@@ -59,10 +59,6 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
     customerAddress: job?.customers?.address || '-',
     customerPhone: job?.customers?.phone || '-',
 
-    laborDesc: `Labor, materials for aircon installation for system ${job?.unit_count || 1} with new pippings, 2 trips`,
-    supplyDesc: `Supply 1 set of ${job?.ac_brand || 'Aircon'} system ${job?.unit_count || 1}`,
-    brandHeading: `${job?.ac_brand || 'Mitsubishi'} Starmex R32 5Ticks`,
-
     units: job?.quotation_breakdown
       ? textToArr(job.quotation_breakdown)
       : [
@@ -98,7 +94,6 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
     isQuotation,
     cvAmount: Number(job?.cv_amount || 300),
     paymentCompany: 'Above All Aircon',
-    hideSupplyDesc: true, // Default to true as requested
     hideMaterialsHeading: false,
     fullyPaid: isReceipt,
     finalPaymentCollected: existingFinalPayment,
@@ -336,39 +331,6 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
               {divider}
               <h3 style={sectionHeadStyle}>Job Description</h3>
 
-              {/* A quotation prints the unit lines on their own, so the labor,
-                  supply and brand fields only apply to invoices and receipts. */}
-              {!isQuotation && (
-                <>
-                  <div>
-                    <label style={labelStyle}>Labor Description (Item 1)</label>
-                    <input name="laborDesc" value={data.laborDesc} onChange={handleChange} style={inputStyle} />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <input 
-                      type="checkbox" 
-                      id="hideSupplyDesc" 
-                      name="hideSupplyDesc" 
-                      checked={data.hideSupplyDesc} 
-                      onChange={handleChange} 
-                      style={{ width: 16, height: 16, cursor: 'pointer' }} 
-                    />
-                    <label htmlFor="hideSupplyDesc" style={{ ...labelStyle, marginBottom: 0, cursor: 'pointer' }}>
-                      Hide Supply Description (Item 2)
-                    </label>
-                  </div>
-                  {!data.hideSupplyDesc && (
-                    <div>
-                      <label style={labelStyle}>Supply Description (Item 2)</label>
-                      <input name="supplyDesc" value={data.supplyDesc} onChange={handleChange} style={inputStyle} />
-                    </div>
-                  )}
-                  <div>
-                    <label style={labelStyle}>Brand / Model Heading</label>
-                    <input name="brandHeading" value={data.brandHeading} onChange={handleChange} style={inputStyle} />
-                  </div>
-                </>
-              )}
               <div>
                 <label style={labelStyle}>Unit Lines <span style={{ fontWeight: 400, color: '#94a3b8' }}>(one per line, shown bold)</span></label>
                 <textarea value={unitsText} onChange={handleUnitsChange} rows={6} style={inputStyle} />

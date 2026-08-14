@@ -248,12 +248,6 @@ export interface InvoiceData {
   customerName: string;
   customerAddress: string;
   customerPhone: string;
-  // Line 1: labor description  e.g. "Labor, materials for aircon installation for system 4 with new pippings, 2 trips"
-  laborDesc: string;
-  // Line 2: supply description  e.g. "Supply 1 set of Mitsubishi Starmex system 4"
-  supplyDesc: string;
-  // Brand/model heading  e.g. "Mitsubishi Starmex R32 5Ticks"
-  brandHeading: string;
   // Individual unit lines
   units: string[];           // e.g. ["MXY4H33VG (Outdoor Unit)", "MSXYFP24VG (Indoor Unit)", ...]
   systemLabel: string;       // e.g. "System 4"
@@ -269,7 +263,6 @@ export interface InvoiceData {
   cvRedeemed?: boolean;
   cvAmount?: number;
   paymentCompany?: 'Above All Aircon' | 'Letswork';
-  hideSupplyDesc?: boolean;
   hideMaterialsHeading?: boolean;
   fullyPaid?: boolean;       // When true: shows PAID stamp + zero balance
   finalPaymentCollected?: number; // Amount collected as final balance payment
@@ -396,56 +389,13 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
             </View>
 
             <View style={{ flexDirection: 'column' }}>
-              {/* Row 1 — a quotation lists only the unit lines, so the labor,
-                  supply and brand rows below are invoice/receipt only. */}
-              {!data.isQuotation && (
-                <View style={styles.tableRow}>
-                  <View style={styles.tdNo}>
-                    <Text>1</Text>
-                  </View>
-                  <View style={[styles.tdDesc, { paddingBottom: 0 }]}>
-                    <Text style={styles.descItem}>{keepIndent(data.laborDesc)}</Text>
-                  </View>
-                  <View style={styles.tdQty} />
-                  <View style={styles.tdAmt} />
-                </View>
-              )}
-
-              {/* Row 2.1: Supply */}
-              {!data.isQuotation && !data.hideSupplyDesc && (
-                <View style={styles.tableRow}>
-                  <View style={[styles.tdNo, { paddingTop: 7 }]}>
-                    <Text>2</Text>
-                  </View>
-                  <View style={[styles.tdDesc, { paddingTop: 7, paddingBottom: 0 }]}>
-                    <Text style={styles.descItem}>{keepIndent(data.supplyDesc)}</Text>
-                  </View>
-                  <View style={styles.tdQty} />
-                  <View style={styles.tdAmt} />
-                </View>
-              )}
-
-              {/* Row 2.2: Brand */}
-              {!data.isQuotation && (
-                <View style={styles.tableRow}>
-                  <View style={[styles.tdNo, { paddingTop: data.hideSupplyDesc ? 7 : 0 }]}>
-                    {data.hideSupplyDesc && <Text>2</Text>}
-                  </View>
-                  <View style={[styles.tdDesc, { paddingTop: data.hideSupplyDesc ? 7 : 4, paddingBottom: 0 }]}>
-                    <Text style={styles.descBold}>{keepIndent(data.brandHeading)}</Text>
-                  </View>
-                  <View style={styles.tdQty} />
-                  <View style={styles.tdAmt} />
-                </View>
-              )}
-
-              {/* Row 2.3: Units & QTY & AMT — numbered itself on a quotation,
-                  where nothing precedes it. */}
+              {/* Row 1: Units & QTY & AMT — the unit lines are the whole item
+                  description, on quotations and invoices alike. */}
               <View style={styles.tableRow}>
-                <View style={[styles.tdNo, { paddingTop: data.isQuotation ? 7 : 0 }]}>
-                  {data.isQuotation && <Text>1</Text>}
+                <View style={[styles.tdNo, { paddingTop: 7 }]}>
+                  <Text>1</Text>
                 </View>
-                <View style={[styles.tdDesc, { paddingTop: data.isQuotation ? 7 : 4, paddingBottom: 0 }]}>
+                <View style={[styles.tdDesc, { paddingTop: 7, paddingBottom: 0 }]}>
                   {data.units.map((u, i) => (
                     u.trim()
                       ? <Text key={i} style={styles.descBold}>{keepIndent(u)}</Text>
@@ -460,7 +410,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                 </View>
               </View>
 
-              {/* Row 2.4: System Label */}
+              {/* Row 1.1: System Label */}
               <View style={styles.tableRow}>
                 <View style={styles.tdNo} />
                 <View style={[styles.tdDesc, { paddingTop: 2, paddingBottom: 0 }]}>
@@ -470,7 +420,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                 <View style={styles.tdAmt} />
               </View>
 
-              {/* Row 2.5: Materials & Warranty */}
+              {/* Row 1.2: Materials & Warranty */}
               <View style={styles.tableRow}>
                 <View style={styles.tdNo} />
                 <View style={[styles.tdDesc, { paddingTop: 7 }]}>
