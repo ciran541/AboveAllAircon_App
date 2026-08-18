@@ -68,7 +68,6 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
           'MSXYFP10VG x 2 (Indoor Unit)',
           '24k, 12k, 9k, 9k BTU',
         ],
-    systemLabel: `System ${job?.unit_count || 4}`,
 
     materials: job?.quotation_materials
       ? textToArr(job.quotation_materials)
@@ -334,10 +333,6 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
               <div>
                 <label style={labelStyle}>Unit Lines <span style={{ fontWeight: 400, color: '#94a3b8' }}>(one per line, shown bold)</span></label>
                 <textarea value={unitsText} onChange={handleUnitsChange} rows={6} style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>System Label</label>
-                <input name="systemLabel" value={data.systemLabel} onChange={handleChange} style={inputStyle} />
               </div>
 
               {divider}

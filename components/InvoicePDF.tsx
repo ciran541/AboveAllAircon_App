@@ -250,7 +250,6 @@ export interface InvoiceData {
   customerPhone: string;
   // Individual unit lines
   units: string[];           // e.g. ["MXY4H33VG (Outdoor Unit)", "MSXYFP24VG (Indoor Unit)", ...]
-  systemLabel: string;       // e.g. "System 4"
   // Materials bullets
   materials: string[];       // e.g. ["22swg copper pipings", ...]
   // Warranty bullets
@@ -410,17 +409,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                 </View>
               </View>
 
-              {/* Row 1.1: System Label */}
-              <View style={styles.tableRow}>
-                <View style={styles.tdNo} />
-                <View style={[styles.tdDesc, { paddingTop: 2, paddingBottom: 0 }]}>
-                  <Text style={[styles.descBold, { marginTop: 0 }]}>{keepIndent(data.systemLabel)}</Text>
-                </View>
-                <View style={styles.tdQty} />
-                <View style={styles.tdAmt} />
-              </View>
-
-              {/* Row 1.2: Materials & Warranty */}
+              {/* Row 1.1: Materials & Warranty */}
               <View style={styles.tableRow}>
                 <View style={styles.tdNo} />
                 <View style={[styles.tdDesc, { paddingTop: 7 }]}>
