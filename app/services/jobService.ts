@@ -29,12 +29,24 @@ import {
 import { diffJob, affectsCalendar, CALENDAR_JOB_FIELDS, type FieldChange } from "@/lib/jobDiff";
 
 /** Invalidates all cached job data for a specific user + the admin dashboard. */
-function invalidateJobCaches(userId?: string) {
+export function invalidateJobCaches(userId?: string) {
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard");
 }
 
 type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * The part of a Supabase client this module's shared helpers actually use.
+ * Widened from SupabaseClient so the booking API — which has no cookie
+ * session to bind a client to, and runs as the service role — can reuse the
+ * same post-write path instead of reimplementing it (see
+ * app/services/bookingService.ts).
+ */
+type JobWriteClient = {
+  rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<unknown>;
+  auth: { getUser: () => PromiseLike<{ data: { user: { id: string } | null } }> };
+};
 
 // ── Internal sync enqueue ─────────────────────────────────────────────────────
 
@@ -67,10 +79,10 @@ export type SyncOutcome = {
  * `syncCalendar` is decided by a real field diff, so most saves don't touch
  * Google at all — editing notes on a completed job now queues nothing.
  */
-async function enqueueAndSync(
+export async function enqueueAndSync(
   jobId: string,
   job: any,
-  supabase: SupabaseClient,
+  supabase: JobWriteClient,
   syncCalendar: boolean
 ): Promise<SyncOutcome> {
   const integrations: SyncIntegration[] = ["sheets"];
@@ -126,13 +138,19 @@ async function fetchCurrentJob(jobId: string, supabase: SupabaseClient) {
  * skipped, which keeps the debounced quotation autosave from filling the
  * timeline with empty entries.
  */
-function recordJobActivity(
+export function recordJobActivity(
   jobId: string,
   action: "created" | "updated" | "deleted",
   changes: FieldChange[],
-  supabase: SupabaseClient,
+  supabase: JobWriteClient,
   /** Human-readable snapshot — the only way to identify a deleted job later. */
-  jobLabel?: string | null
+  jobLabel?: string | null,
+  /**
+   * Who did it, when the caller already knows. The booking API does: there is
+   * no cookie session on an API request, and attributing the AI assistant's
+   * bookings to nobody would make the activity log lie about who books what.
+   */
+  actorId?: string | null
 ): void {
   if (action === "updated" && changes.length === 0) return;
 
@@ -141,10 +159,13 @@ function recordJobActivity(
   // entry. after() keeps it alive on serverless, so it still gets recorded.
   after(async () => {
     try {
-      const { data: auth } = await supabase.auth.getUser();
+      const resolvedActor =
+        actorId !== undefined
+          ? actorId
+          : (await supabase.auth.getUser()).data?.user?.id ?? null;
       await createAdminClient().from("job_activity").insert({
         job_id: jobId,
-        actor_id: auth?.user?.id ?? null,
+        actor_id: resolvedActor,
         action,
         changes,
         job_label: jobLabel ?? null,

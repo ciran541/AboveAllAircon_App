@@ -277,6 +277,12 @@ export type ListedEvent = {
   startDateTime?: string;
   /** YYYY-MM-DD for an all-day event. */
   startDate?: string;
+  /** RFC3339 instant for a timed event's end. */
+  endDateTime?: string;
+  /** YYYY-MM-DD for an all-day event's end — exclusive, as Google returns it. */
+  endDate?: string;
+  /** The event's title. Empty on events created without one. */
+  summary?: string;
 };
 
 /**
@@ -287,8 +293,24 @@ export type ListedEvent = {
  *
  * `showDeleted` is what makes soft-deleted ("cancelled") events visible —
  * without it a manually-deleted event is indistinguishable from a healthy one.
+ *
+ * The options are for availability (lib/calendarBlocks.ts), which needs a
+ * bounded window rather than "everything from here on", and needs recurring
+ * events expanded into the instances they actually occupy:
+ *
+ *   - `timeMaxIso` closes the window. Reconciliation deliberately doesn't use
+ *     it — it wants every future event.
+ *   - `singleEvents` expands a recurring series into its instances. Without it
+ *     Google returns the series once, at its first start, so a weekly block
+ *     would be invisible on every date but the first. Job events are never
+ *     recurring, so this changes nothing for reconciliation's use of the ids.
+ *
+ * Both default off, so the existing call site behaves exactly as before.
  */
-export async function listCalendarEvents(timeMinIso: string): Promise<Map<string, ListedEvent>> {
+export async function listCalendarEvents(
+  timeMinIso: string,
+  options: { timeMaxIso?: string; singleEvents?: boolean } = {}
+): Promise<Map<string, ListedEvent>> {
   const calendarId = encodeURIComponent(getRequiredEnv("GOOGLE_CALENDAR_ID"));
   const token = await getAccessToken();
   const events = new Map<string, ListedEvent>();
@@ -299,12 +321,20 @@ export async function listCalendarEvents(timeMinIso: string): Promise<Map<string
       showDeleted: "true",
       maxResults: "2500",
       timeMin: timeMinIso,
-      fields: "nextPageToken,items(id,status,start)",
+      fields: "nextPageToken,items(id,status,summary,start,end)",
     });
+    if (options.timeMaxIso) search.set("timeMax", options.timeMaxIso);
+    if (options.singleEvents) search.set("singleEvents", "true");
     if (pageToken) search.set("pageToken", pageToken);
 
     const page: {
-      items?: { id?: string; status?: string; start?: { dateTime?: string; date?: string } }[];
+      items?: {
+        id?: string;
+        status?: string;
+        summary?: string;
+        start?: { dateTime?: string; date?: string };
+        end?: { dateTime?: string; date?: string };
+      }[];
       nextPageToken?: string;
     } = await withRetry(async () => {
       const response = await fetch(
@@ -324,6 +354,9 @@ export async function listCalendarEvents(timeMinIso: string): Promise<Map<string
         status: item.status,
         startDateTime: item.start?.dateTime,
         startDate: item.start?.date,
+        endDateTime: item.end?.dateTime,
+        endDate: item.end?.date,
+        summary: item.summary,
       });
     }
     pageToken = page.nextPageToken;

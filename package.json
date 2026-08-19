@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --import ./scripts/register-test-loader.mjs scripts/run-tests.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.4.0",

@@ -141,3 +141,98 @@ export async function maybeSendSyncDigest(params: {
     return { sent: false, reason: "error" };
   }
 }
+
+// ── Booking availability ──────────────────────────────────────────────────────
+
+/** Re-report an unchanged Calendar outage at most this often. */
+const CALENDAR_BLOCK_REMINDER_HOURS = 6;
+
+/**
+ * Warns that availability is being computed without the Google Calendar.
+ *
+ * lib/calendarBlocks.ts fails open when Google can't be read: the assistant
+ * keeps booking, but from the jobs table alone, so any work typed straight
+ * into Calendar is invisible and can be sold over. That trade is deliberate —
+ * an outage that stops every booking is worse than a rare double-book — but it
+ * has to be visible, because nothing else about it looks wrong: the API keeps
+ * answering 200.
+ *
+ * Throttled through booking_alert_state, the same way maybeSendSyncDigest uses
+ * sync_alert_state: an outage produces one email, not one per request.
+ * Never throws — alerting must not be able to break a booking.
+ */
+export async function maybeSendCalendarBlockAlert(
+  error: string
+): Promise<{ sent: boolean; reason: string }> {
+  try {
+    if (!ALERT_WEBHOOK_URL) return { sent: false, reason: "no webhook configured" };
+
+    const admin = createAdminClient();
+    // Fingerprint the kind of failure, not the exact text: Google's messages
+    // carry request ids that would otherwise make every failure look new.
+    const kind = error.replace(/[0-9a-f]{8,}/gi, "…").replace(/\d+/g, "#").slice(0, 200);
+    const fingerprint = crypto.createHash("sha256").update(kind).digest("hex");
+
+    const { data: state } = await admin
+      .from("booking_alert_state")
+      .select("fingerprint, last_sent_at")
+      .eq("id", 1)
+      .maybeSingle();
+
+    const unchanged = state?.fingerprint === fingerprint;
+    const lastSentAt = state?.last_sent_at ? new Date(state.last_sent_at).getTime() : 0;
+    const reminderDue = Date.now() - lastSentAt > CALENDAR_BLOCK_REMINDER_HOURS * 3_600_000;
+
+    if (unchanged && !reminderDue) {
+      return { sent: false, reason: "same problem, already reported" };
+    }
+
+    await postToAppsScript(
+      "Aircon app: booking availability can't see Google Calendar",
+      "Availability for the AI assistant is being computed from jobs only, so " +
+        "anything entered directly in Google Calendar — reserved mornings, leave, " +
+        "jobs typed straight into Calendar — is currently invisible to it and can " +
+        "be double-booked.\n\n" +
+        `Bookings are still being accepted.\n\nGoogle said:\n${error.slice(0, 500)}`
+    );
+
+    await admin
+      .from("booking_alert_state")
+      .update({
+        fingerprint,
+        last_sent_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", 1);
+
+    return { sent: true, reason: unchanged ? "reminder" : "new problem" };
+  } catch (err: any) {
+    console.error("[alertMail] calendar block alert failed:", err?.message ?? err);
+    return { sent: false, reason: "error" };
+  }
+}
+
+/** Records that Google is readable again, so the next outage alerts promptly. */
+export async function clearCalendarBlockAlert(): Promise<void> {
+  try {
+    if (!ALERT_WEBHOOK_URL) return;
+    const admin = createAdminClient();
+    const { data: state } = await admin
+      .from("booking_alert_state")
+      .select("fingerprint")
+      .eq("id", 1)
+      .maybeSingle();
+    if (!state?.fingerprint) return;
+
+    await postToAppsScript(
+      "Aircon app: booking availability can see Google Calendar again",
+      "Availability is once again accounting for entries made directly in Google Calendar."
+    );
+    await admin
+      .from("booking_alert_state")
+      .update({ fingerprint: null, updated_at: new Date().toISOString() })
+      .eq("id", 1);
+  } catch (err: any) {
+    console.error("[alertMail] calendar block all-clear failed:", err?.message ?? err);
+  }
+}
