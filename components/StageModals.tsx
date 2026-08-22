@@ -249,7 +249,7 @@ export function ConfirmJobModal({
   loading: boolean;
 }) {
   const [cjDate, setCjDate] = useState(job?.job_date || "");
-  const [cjTime, setCjTime] = useState(job?.job_time || "");
+  const [cjTime, setCjTime] = useState(job?.job_time || "10:00");
   const [cjCollected, setCjCollected] = useState(job?.deposit_collected || 0);
   const [cvRedeemed, setCvRedeemed] = useState(Boolean(job?.cv_redeemed));
   const [cvAmount, setCvAmount] = useState(Number(job?.cv_amount || 0));

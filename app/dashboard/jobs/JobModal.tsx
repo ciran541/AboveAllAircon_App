@@ -28,7 +28,7 @@ export default function JobModal({
 
   const [formData, setFormData] = useState<Partial<Job>>(
     job || {
-      stage: "Site Visit Scheduled",
+      stage: "Quotation Sent",
       customer_id: "",
       service_type: "Installation",
       ac_brand: "",
@@ -53,7 +53,7 @@ export default function JobModal({
   // Not every job starts with a site visit — a direct installation skips
   // straight to quoting. For an existing job we infer it from the job
   // already having no visit on record.
-  const [skipVisit, setSkipVisit] = useState(isNew ? false : !job!.visit_date);
+  const [skipVisit, setSkipVisit] = useState(isNew ? true : !job!.visit_date);
 
   const toggleSkipVisit = (skip: boolean) => {
     setSkipVisit(skip);
@@ -113,13 +113,8 @@ export default function JobModal({
 
     let newCustomerData;
     if (isNewCustomer) {
-      if (!newCustomer.name.trim()) {
-        setError("Customer name is required.");
-        setLoading(false);
-        return;
-      }
       newCustomerData = {
-        name: newCustomer.name,
+        name: newCustomer.name.trim() || "Unknown Customer",
         phone: newCustomer.phone || null,
         address: newCustomer.address || null,
         unit_type: newCustomer.unit_type || null,
@@ -216,7 +211,7 @@ export default function JobModal({
               {isNewCustomer ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "20px", background: "#f8fafc", borderRadius: 16, border: "1px dashed #cbd5e1" }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b" }}>✨ New Customer Details</div>
-                  <input className="form-input" required placeholder="Full Name *" value={newCustomer.name} onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })} />
+                  <input className="form-input" placeholder="Full Name" value={newCustomer.name} onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })} />
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     <input className="form-input" placeholder="Phone Number" value={newCustomer.phone} onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })} />
                     <select className="form-input" value={newCustomer.unit_type} onChange={(e) => setNewCustomer({ ...newCustomer, unit_type: e.target.value })}>
@@ -269,16 +264,6 @@ export default function JobModal({
                     <option value="Installation">Installation</option>
                     <option value="Servicing">Servicing</option>
                   </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">AC Brand</label>
-                  <input className="form-input" placeholder="e.g. Daikin, Mitsubishi" value={formData.ac_brand || ""} onChange={(e) => setFormData({ ...formData, ac_brand: e.target.value })} />
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                <div className="form-group">
-                  <label className="form-label">Number of Units</label>
-                  <input type="number" className="form-input" min={1} value={formData.unit_count || 1} onChange={(e) => setFormData({ ...formData, unit_count: parseInt(e.target.value) || 1 })} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Lead Source</label>
