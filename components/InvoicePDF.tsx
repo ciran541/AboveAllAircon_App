@@ -452,8 +452,8 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                 </View>
               )}
               <View style={styles.totalLine}>
-                <Text style={[styles.totalLabelCell, !data.fullyPaid ? styles.balanceBg : {}]}>Deposit</Text>
-                <Text style={[styles.totalValueCell, !data.fullyPaid ? styles.balanceBg : {}]}>{depositLabel}</Text>
+                <Text style={[styles.totalLabelCell, data.isQuotation ? styles.balanceBg : {}]}>Deposit</Text>
+                <Text style={[styles.totalValueCell, data.isQuotation ? styles.balanceBg : {}]}>{depositLabel}</Text>
               </View>
               {data.fullyPaid && (data.finalPaymentCollected || 0) > 0 && (
                 <View style={styles.totalLine}>
@@ -470,8 +470,8 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                 </View>
               ) : (
                 <View style={styles.totalLine}>
-                  <Text style={styles.totalLabelCell}>Balance</Text>
-                  <Text style={styles.totalValueCell}>
+                  <Text style={[styles.totalLabelCell, !data.isQuotation ? styles.balanceBg : {}]}>Balance</Text>
+                  <Text style={[styles.totalValueCell, !data.isQuotation ? styles.balanceBg : {}]}>
                     S${displayBalance.toFixed(0)}
                   </Text>
                 </View>
