@@ -295,8 +295,8 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
   const logoUrl = '/logo.png';
 
   const formattedDeposit = `S$${data.depositCollected.toFixed(0)}`;
-  const depositLabel = data.isQuotation 
-    ? formattedDeposit 
+  const depositLabel = data.isQuotation
+    ? formattedDeposit
     : (data.depositCollected > 0 ? `${formattedDeposit}\nCollected` : formattedDeposit);
 
   // For fully-paid receipts, balance displayed is always $0
@@ -317,7 +317,6 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
           <View>
             <Image src={logoUrl} style={styles.logo} />
             <View style={styles.companyInfo}>
-              <Text style={styles.bold}>UEN: 202538280D</Text>
               <Text style={styles.bold}>21 BUKIT BATOK CRESCENT</Text>
               <Text style={styles.bold}>#12-78 WCEGA TOWER</Text>
               <Text style={styles.bold}>TEL: +65 98596637</Text>
@@ -507,7 +506,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
             <Text style={styles.footerBold}>UEN: 202538280D (Above All Aircon Pte Ltd)</Text>
           )}
           <Text style={{ marginTop: 18 }}>
-            Thank you for choosing {data.paymentCompany === 'Letswork' ? 'Letswork Pte Ltd' : 'Above All Aircon Pte Ltd'}!
+            Thank you for choosing us!
           </Text>
         </View>
 
