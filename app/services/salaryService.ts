@@ -355,7 +355,7 @@ export async function createMonthlyPayslips(
       const fullBasicSalary = Number(w.basic_salary)
       const workingDays = workingDaysByWorker[w.id] ?? STANDARD_WORKING_DAYS
       const basicSalary = fullBasicSalary * (workingDays / STANDARD_WORKING_DAYS)
-      const otPerHour = fullBasicSalary / workingDays / 8 * 1.5
+      const otPerHour = fullBasicSalary / STANDARD_WORKING_DAYS / 8 * 1.5
       const additional3hrOt = workingDays * 3
       const additionalOt = otByWorker[w.id] ?? 0
       const totalOt = additional3hrOt + additionalOt
