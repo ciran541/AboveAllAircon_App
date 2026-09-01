@@ -42,12 +42,14 @@ export default function SalaryClient({
   const [bonusEntries, setBonusEntries] = useState(initialBonusEntries)
   const [month, setMonth] = useState(initialMonth)
   const [year, setYear] = useState(initialYear)
+  const [isMonthLoading, setIsMonthLoading] = useState(false)
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
 
   // Refresh data when month/year changes
   async function changeMonthYear(m: number, y: number) {
     setMonth(m); setYear(y)
+    setIsMonthLoading(true)
     const [payRes, otRes, bonusRes] = await Promise.all([
       salaryActions.getPayslips(m, y),
       salaryActions.getOtEntries(m, y),
@@ -56,6 +58,7 @@ export default function SalaryClient({
     setPayslips(!('error' in payRes) ? payRes.payslips ?? [] : [])
     setOtEntries(!('error' in otRes) ? otRes.entries ?? [] : [])
     setBonusEntries(!('error' in bonusRes) ? bonusRes.entries ?? [] : [])
+    setIsMonthLoading(false)
   }
 
   // Worker actions
@@ -187,7 +190,26 @@ export default function SalaryClient({
       </div>
 
       {/* Content — all tabs stay mounted; CSS hides inactive ones to avoid remount cost */}
-      <div style={{ padding: '20px', flex: 1, overflowY: 'auto' }}>
+      <div style={{ padding: '20px', flex: 1, overflowY: 'auto', position: 'relative' }}>
+        {/* Month-switch loading overlay */}
+        {isMonthLoading && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 10,
+            background: 'rgba(255,255,255,0.72)',
+            backdropFilter: 'blur(2px)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12,
+          }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: '50%',
+              border: '3px solid #e4e9f0',
+              borderTopColor: '#7c3aed',
+              animation: 'salary-spin 0.7s linear infinite',
+            }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#7c3aed', letterSpacing: '-0.2px' }}>Loading…</span>
+            <style>{`@keyframes salary-spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        )}
+
         <div style={{ display: activeTab === 'workers' ? undefined : 'none' }}>
           <WorkersTab workers={workers} role={role} onCreateWorker={handleCreateWorker} onUpdateWorker={handleUpdateWorker} onDeleteWorker={handleDeleteWorker} />
         </div>
