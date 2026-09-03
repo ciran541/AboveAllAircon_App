@@ -177,11 +177,19 @@ export interface PayslipData {
   totalSalary: number;
   signedAt: string | null;
   signatureData?: string;
+  weekdayOtHours?: number;
+  weekdayOtAmount?: number;
+  sundayOtHours?: number;
+  sundayOtMultiplier?: number;
+  sundayOtAmount?: number;
 }
 
 const formatCurrency = (n: number) => `S$${n.toFixed(2)}`;
 
 const PayslipPDF: React.FC<{ data: PayslipData }> = ({ data }) => {
+  const hasSundayBreakdown = Boolean(data.sundayOtHours && data.sundayOtHours > 0);
+  const sundayRate = (data.basicSalary / (data.workingDays || 26) / 8) * (data.sundayOtMultiplier || 1.5);
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -237,11 +245,19 @@ const PayslipPDF: React.FC<{ data: PayslipData }> = ({ data }) => {
 
             <View style={styles.tableRow}>
               <Text style={styles.tableCellDesc}>
-                Overtime ({data.totalOt.toFixed(1)} hrs @ {formatCurrency(data.otPerHour)}/hr)
+                Overtime ({data.totalOt.toFixed(1)} hrs)
                 {'\n'}
-                <Text style={{ fontSize: 9, color: '#64748b' }}>
-                  Includes: Default ({data.additional3hrOt.toFixed(0)} hrs) + Additional ({data.additionalOt.toFixed(1)} hrs)
-                </Text>
+                {hasSundayBreakdown ? (
+                  <Text style={{ fontSize: 9, color: '#64748b' }}>
+                    • Built-in: {data.additional3hrOt.toFixed(0)} hrs @ {formatCurrency(data.otPerHour)}/hr
+                    {'\n'}• Weekday OT: {(data.weekdayOtHours ?? 0).toFixed(1)} hrs @ {formatCurrency(data.otPerHour)}/hr (1.5×)
+                    {'\n'}• Sunday OT: {data.sundayOtHours?.toFixed(1)} hrs @ {formatCurrency(sundayRate)}/hr ({data.sundayOtMultiplier ?? 1.5}×)
+                  </Text>
+                ) : (
+                  <Text style={{ fontSize: 9, color: '#64748b' }}>
+                    Includes: Default ({data.additional3hrOt.toFixed(0)} hrs) + Additional ({data.additionalOt.toFixed(1)} hrs) @ {formatCurrency(data.otPerHour)}/hr
+                  </Text>
+                )}
               </Text>
               <Text style={styles.tableCellValue}>{formatCurrency(data.totalOtAmount)}</Text>
             </View>

@@ -15,6 +15,8 @@ interface Payslip {
   additional_ot: number; total_ot: number; total_ot_amount: number
   total_bonus: number; total_salary: number
   signed_at: string | null; signature_data: string | null; created_at: string
+  weekday_ot_hours?: number; weekday_ot_amount?: number
+  sunday_ot_hours?: number; sunday_ot_multiplier?: number; sunday_ot_amount?: number
 }
 
 interface PayslipsTabProps {
@@ -274,7 +276,14 @@ const PayslipsTab = memo(function PayslipsTab({ payslips, otEntries, bonusEntrie
                     <td style={{ padding: '12px 10px', fontWeight: 600, color: '#0f172a' }}>{formatCurrency(p.basic_salary)}</td>
                     <td style={{ padding: '12px 10px', color: '#64748b', fontSize: 11 }}>{formatCurrency(p.ot_per_hour)}</td>
                     <td style={{ padding: '12px 10px', color: '#64748b', fontSize: 11 }}>{Number(p.additional_3hr_ot).toFixed(0)}h</td>
-                    <td style={{ padding: '12px 10px', color: Number(p.additional_ot) > 0 ? '#2563eb' : '#94a3b8', fontWeight: Number(p.additional_ot) > 0 ? 600 : 400, fontSize: 11 }}>{Number(p.additional_ot).toFixed(1)}h</td>
+                    <td style={{ padding: '12px 10px', color: Number(p.additional_ot) > 0 ? '#2563eb' : '#94a3b8', fontWeight: Number(p.additional_ot) > 0 ? 600 : 400, fontSize: 11 }}>
+                      <div>{Number(p.additional_ot).toFixed(1)}h</div>
+                      {Boolean(p.sunday_ot_hours && Number(p.sunday_ot_hours) > 0) && (
+                        <div style={{ fontSize: 9.5, color: '#dc2626', fontWeight: 600, marginTop: 2 }}>
+                          {Number(p.sunday_ot_hours).toFixed(1)}h Sun ({p.sunday_ot_multiplier ?? 1.5}×)
+                        </div>
+                      )}
+                    </td>
                     <td style={{ padding: '12px 10px', fontWeight: 600, color: '#0f172a', fontSize: 11 }}>{Number(p.total_ot).toFixed(1)}h</td>
                     <td style={{ padding: '12px 10px', fontWeight: 600, color: '#059669' }}>{formatCurrency(p.total_ot_amount)}</td>
                     <td style={{ padding: '12px 10px', fontWeight: 600, color: Number(p.total_bonus || 0) > 0 ? '#d97706' : '#94a3b8' }}>{formatCurrency(Number(p.total_bonus || 0))}</td>
@@ -320,6 +329,11 @@ const PayslipsTab = memo(function PayslipsTab({ payslips, otEntries, bonusEntrie
                                 totalSalary: Number(p.total_salary),
                                 signedAt: p.signed_at,
                                 signatureData: p.signature_data || undefined,
+                                weekdayOtHours: p.weekday_ot_hours !== undefined ? Number(p.weekday_ot_hours) : undefined,
+                                weekdayOtAmount: p.weekday_ot_amount !== undefined ? Number(p.weekday_ot_amount) : undefined,
+                                sundayOtHours: p.sunday_ot_hours !== undefined ? Number(p.sunday_ot_hours) : undefined,
+                                sundayOtMultiplier: p.sunday_ot_multiplier !== undefined ? Number(p.sunday_ot_multiplier) : undefined,
+                                sundayOtAmount: p.sunday_ot_amount !== undefined ? Number(p.sunday_ot_amount) : undefined,
                               }} />}
                               fileName={`Payslip_${p.worker_name.replace(/\s+/g, '_')}_${MONTH_NAMES[p.month]}_${p.year}.pdf`}
                               style={{
@@ -354,7 +368,15 @@ const PayslipsTab = memo(function PayslipsTab({ payslips, otEntries, bonusEntrie
                   <div><span style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase' }}>Basic</span><div style={{ fontSize: 13, fontWeight: 600 }}>{formatCurrency(p.basic_salary)}</div></div>
                   <div><span style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase' }}>OT Pay</span><div style={{ fontSize: 13, fontWeight: 600, color: '#059669' }}>{formatCurrency(p.total_ot_amount)}</div></div>
                   <div><span style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase' }}>Bonus</span><div style={{ fontSize: 13, fontWeight: 600, color: '#d97706' }}>{formatCurrency(Number(p.total_bonus || 0))}</div></div>
-                  <div><span style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase' }}>Total OT</span><div style={{ fontSize: 13, fontWeight: 600 }}>{Number(p.total_ot).toFixed(1)} hrs</div></div>
+                  <div>
+                    <span style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase' }}>Total OT</span>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{Number(p.total_ot).toFixed(1)} hrs</div>
+                    {Boolean(p.sunday_ot_hours && Number(p.sunday_ot_hours) > 0) && (
+                      <div style={{ fontSize: 10, color: '#dc2626', fontWeight: 600 }}>
+                        Incl. {Number(p.sunday_ot_hours).toFixed(1)}h Sun ({p.sunday_ot_multiplier ?? 1.5}×)
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
                   {p.signed_at ? (
@@ -384,6 +406,11 @@ const PayslipsTab = memo(function PayslipsTab({ payslips, otEntries, bonusEntrie
                         totalOtAmount: Number(p.total_ot_amount), totalBonus: Number(p.total_bonus || 0),
                         totalSalary: Number(p.total_salary), signedAt: p.signed_at,
                         signatureData: p.signature_data || undefined,
+                        weekdayOtHours: p.weekday_ot_hours !== undefined ? Number(p.weekday_ot_hours) : undefined,
+                        weekdayOtAmount: p.weekday_ot_amount !== undefined ? Number(p.weekday_ot_amount) : undefined,
+                        sundayOtHours: p.sunday_ot_hours !== undefined ? Number(p.sunday_ot_hours) : undefined,
+                        sundayOtMultiplier: p.sunday_ot_multiplier !== undefined ? Number(p.sunday_ot_multiplier) : undefined,
+                        sundayOtAmount: p.sunday_ot_amount !== undefined ? Number(p.sunday_ot_amount) : undefined,
                       }} />}
                       fileName={`Payslip_${p.worker_name.replace(/\s+/g, '_')}_${MONTH_NAMES[p.month]}_${p.year}.pdf`}
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, background: '#f1f5f9', color: '#64748b', textDecoration: 'none' }}

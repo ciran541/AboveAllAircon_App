@@ -33,20 +33,36 @@ export async function createWorker(worker: {
   bank_account?: string
   fin_no?: string
   levy?: number
+  sunday_ot_multiplier?: number
 }) {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const insertPayload: Record<string, any> = {
+    name: worker.name,
+    wp_number: worker.wp_number ?? '',
+    basic_salary: worker.basic_salary,
+    bank_account: worker.bank_account ?? '',
+    fin_no: worker.fin_no ?? '',
+    levy: worker.levy ?? 0,
+    sunday_ot_multiplier: worker.sunday_ot_multiplier ?? 1.5,
+  }
+
+  let { data, error } = await supabase
     .from('workers')
-    .insert([{
-      name: worker.name,
-      wp_number: worker.wp_number ?? '',
-      basic_salary: worker.basic_salary,
-      bank_account: worker.bank_account ?? '',
-      fin_no: worker.fin_no ?? '',
-      levy: worker.levy ?? 0,
-    }])
+    .insert([insertPayload])
     .select()
     .single()
+
+  // Fallback if migration hasn't been run yet
+  if (error && error.code === 'PGRST204') {
+    delete insertPayload.sunday_ot_multiplier
+    const retry = await supabase
+      .from('workers')
+      .insert([insertPayload])
+      .select()
+      .single()
+    data = retry.data
+    error = retry.error
+  }
 
   if (error) return { error: error.message }
   invalidateSalaryCaches()
@@ -62,15 +78,31 @@ export async function updateWorker(
     bank_account: string
     fin_no: string
     levy: number
+    sunday_ot_multiplier: number
   }>
 ) {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const updatePayload: Record<string, any> = { ...updates, updated_at: new Date().toISOString() }
+
+  let { data, error } = await supabase
     .from('workers')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update(updatePayload)
     .eq('id', id)
     .select()
     .single()
+
+  // Fallback if migration hasn't been run yet
+  if (error && error.code === 'PGRST204') {
+    delete updatePayload.sunday_ot_multiplier
+    const retry = await supabase
+      .from('workers')
+      .update(updatePayload)
+      .eq('id', id)
+      .select()
+      .single()
+    data = retry.data
+    error = retry.error
+  }
 
   if (error) return { error: error.message }
   invalidateSalaryCaches()
@@ -273,9 +305,18 @@ export async function getPayslips(month: number, year: number) {
 /** Baseline days used to prorate a worker's full monthly basic_salary. */
 const STANDARD_WORKING_DAYS = 26
 
+/** Returns true if a YYYY-MM-DD date string falls on a Sunday. */
+function isSunday(dateStr: string): boolean {
+  // Parse as local date to avoid timezone shifts changing the day
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d).getDay() === 0
+}
+
 /**
  * Core function: Creates monthly payslips for all active workers.
  * Snapshots worker data and calculates all OT + bonus fields.
+ * Sunday OT entries use each worker's configured sunday_ot_multiplier;
+ * weekday OT always uses 1.5×.
  *
  * workingDaysByWorker maps worker_id -> days worked that month. Workers not
  * present in the map fall back to STANDARD_WORKING_DAYS (a full month).
@@ -320,10 +361,16 @@ export async function createMonthlyPayslips(
 
   if (bonusError) return { error: bonusError.message }
 
-  // 3. Sum OT hours per worker
-  const otByWorker: Record<string, number> = {}
+  // 3. Sum OT hours per worker, split into weekday vs Sunday
+  const weekdayOtByWorker: Record<string, number> = {}
+  const sundayOtByWorker: Record<string, number> = {}
   for (const entry of (otEntries ?? [])) {
-    otByWorker[entry.worker_id] = (otByWorker[entry.worker_id] ?? 0) + Number(entry.hours)
+    const hours = Number(entry.hours)
+    if (isSunday(entry.entry_date)) {
+      sundayOtByWorker[entry.worker_id] = (sundayOtByWorker[entry.worker_id] ?? 0) + hours
+    } else {
+      weekdayOtByWorker[entry.worker_id] = (weekdayOtByWorker[entry.worker_id] ?? 0) + hours
+    }
   }
 
   // 3a. Sum bonus amounts per worker
@@ -355,11 +402,29 @@ export async function createMonthlyPayslips(
       const fullBasicSalary = Number(w.basic_salary)
       const workingDays = workingDaysByWorker[w.id] ?? STANDARD_WORKING_DAYS
       const basicSalary = fullBasicSalary * (workingDays / STANDARD_WORKING_DAYS)
-      const otPerHour = fullBasicSalary / STANDARD_WORKING_DAYS / 8 * 1.5
+
+      // Base hourly OT rate (1.5× of daily rate)
+      const baseOtPerHour = fullBasicSalary / STANDARD_WORKING_DAYS / 8 * 1.5
+
+      // Weekday OT at standard 1.5×
+      const weekdayHours = weekdayOtByWorker[w.id] ?? 0
+      const weekdayOtAmount = weekdayHours * baseOtPerHour
+
+      // Sunday OT at worker's configured multiplier
+      const sundayMultiplier = Number(w.sunday_ot_multiplier ?? 1.5)
+      const sundayHours = sundayOtByWorker[w.id] ?? 0
+      // Sunday rate = base_daily_rate × sunday_multiplier (base_daily = salary/26/8)
+      const sundayOtPerHour = fullBasicSalary / STANDARD_WORKING_DAYS / 8 * sundayMultiplier
+      const sundayOtAmount = sundayHours * sundayOtPerHour
+
+      // Legacy fields kept for backward compatibility
       const additional3hrOt = workingDays * 3
-      const additionalOt = otByWorker[w.id] ?? 0
+      const additionalOt = weekdayHours + sundayHours  // total additional OT hours
       const totalOt = additional3hrOt + additionalOt
-      const totalOtAmount = totalOt * otPerHour
+      // The 3-hr built-in OT uses base rate (1.5×)
+      const builtInOtAmount = additional3hrOt * baseOtPerHour
+      const totalOtAmount = builtInOtAmount + weekdayOtAmount + sundayOtAmount
+
       const totalBonus = bonusByWorker[w.id] ?? 0
       const totalSalary = basicSalary + totalOtAmount + totalBonus
 
@@ -372,13 +437,19 @@ export async function createMonthlyPayslips(
         basic_salary: Math.round(basicSalary * 100) / 100,
         bank_account: w.bank_account ?? '',
         working_days: workingDays,
-        ot_per_hour: Math.round(otPerHour * 100) / 100,
+        ot_per_hour: Math.round(baseOtPerHour * 100) / 100,
         additional_3hr_ot: additional3hrOt,
         additional_ot: additionalOt,
         total_ot: totalOt,
         total_ot_amount: Math.round(totalOtAmount * 100) / 100,
         total_bonus: Math.round(totalBonus * 100) / 100,
         total_salary: Math.round(totalSalary * 100) / 100,
+        // Sunday breakdown snapshot
+        weekday_ot_hours: Math.round(weekdayHours * 100) / 100,
+        weekday_ot_amount: Math.round(weekdayOtAmount * 100) / 100,
+        sunday_ot_hours: Math.round(sundayHours * 100) / 100,
+        sunday_ot_multiplier: sundayMultiplier,
+        sunday_ot_amount: Math.round(sundayOtAmount * 100) / 100,
       }
     })
 
@@ -396,9 +467,26 @@ export async function createMonthlyPayslips(
 
   // 6. Insert new payslips
   if (payslipRows.length > 0) {
-    const { error: insertError } = await supabase
+    let { error: insertError } = await supabase
       .from('salary_payslips')
       .insert(payslipRows)
+
+    // Fallback if migration hasn't been run yet: strip Sunday breakdown columns
+    if (insertError && insertError.code === 'PGRST204') {
+      const fallbackRows = payslipRows.map(row => {
+        const r = { ...row }
+        delete (r as any).weekday_ot_hours
+        delete (r as any).weekday_ot_amount
+        delete (r as any).sunday_ot_hours
+        delete (r as any).sunday_ot_multiplier
+        delete (r as any).sunday_ot_amount
+        return r
+      })
+      const retry = await supabase
+        .from('salary_payslips')
+        .insert(fallbackRows)
+      insertError = retry.error
+    }
 
     if (insertError) return { error: insertError.message }
   }

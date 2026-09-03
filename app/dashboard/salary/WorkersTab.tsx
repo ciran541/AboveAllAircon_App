@@ -10,12 +10,13 @@ interface Worker {
   bank_account: string
   wp_number: string
   fin_no: string
+  sunday_ot_multiplier?: number
 }
 
 interface WorkersTabProps {
   workers: Worker[]
   role: 'admin' | 'staff'
-  onCreateWorker: (data: { name: string; wp_number: string; basic_salary: number; bank_account: string; fin_no: string; levy: number }) => Promise<any>
+  onCreateWorker: (data: { name: string; wp_number: string; basic_salary: number; bank_account: string; fin_no: string; levy: number; sunday_ot_multiplier?: number }) => Promise<any>
   onUpdateWorker: (id: string, data: Partial<Worker>) => Promise<any>
   onDeleteWorker: (id: string) => Promise<any>
 }
@@ -60,7 +61,7 @@ function formatCurrency(n: number) {
 const WorkersTab = memo(function WorkersTab({ workers, role, onCreateWorker, onUpdateWorker, onDeleteWorker }: WorkersTabProps) {
   const [showModal, setShowModal] = useState(false)
   const [editWorker, setEditWorker] = useState<Worker | null>(null)
-  const [form, setForm] = useState({ name: '', basic_salary: '', levy: '', bank_account: '', wp_number: '', fin_no: '' })
+  const [form, setForm] = useState({ name: '', basic_salary: '', levy: '', bank_account: '', wp_number: '', fin_no: '', sunday_ot_multiplier: '1.5' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
@@ -69,14 +70,22 @@ const WorkersTab = memo(function WorkersTab({ workers, role, onCreateWorker, onU
 
   function openCreate() {
     setEditWorker(null)
-    setForm({ name: '', basic_salary: '', levy: '', bank_account: '', wp_number: '', fin_no: '' })
+    setForm({ name: '', basic_salary: '', levy: '', bank_account: '', wp_number: '', fin_no: '', sunday_ot_multiplier: '1.5' })
     setError(null)
     setShowModal(true)
   }
 
   function openEdit(w: Worker) {
     setEditWorker(w)
-    setForm({ name: w.name, basic_salary: String(w.basic_salary), levy: String(w.levy ?? 0), bank_account: w.bank_account, wp_number: w.wp_number, fin_no: w.fin_no ?? '' })
+    setForm({
+      name: w.name,
+      basic_salary: String(w.basic_salary),
+      levy: String(w.levy ?? 0),
+      bank_account: w.bank_account,
+      wp_number: w.wp_number,
+      fin_no: w.fin_no ?? '',
+      sunday_ot_multiplier: String(w.sunday_ot_multiplier ?? 1.5)
+    })
     setError(null)
     setShowModal(true)
   }
@@ -88,12 +97,29 @@ const WorkersTab = memo(function WorkersTab({ workers, role, onCreateWorker, onU
     const salary = parseFloat(form.basic_salary)
     if (isNaN(salary) || salary <= 0) { setError('Invalid salary'); setLoading(false); return }
     const levy = parseFloat(form.levy) || 0
+    const sundayMultiplier = parseFloat(form.sunday_ot_multiplier) || 1.5
 
     let result
     if (editWorker) {
-      result = await onUpdateWorker(editWorker.id, { name: form.name, basic_salary: salary, levy, bank_account: form.bank_account, wp_number: form.wp_number, fin_no: form.fin_no })
+      result = await onUpdateWorker(editWorker.id, {
+        name: form.name,
+        basic_salary: salary,
+        levy,
+        bank_account: form.bank_account,
+        wp_number: form.wp_number,
+        fin_no: form.fin_no,
+        sunday_ot_multiplier: sundayMultiplier
+      })
     } else {
-      result = await onCreateWorker({ name: form.name, basic_salary: salary, levy, bank_account: form.bank_account, wp_number: form.wp_number, fin_no: form.fin_no })
+      result = await onCreateWorker({
+        name: form.name,
+        basic_salary: salary,
+        levy,
+        bank_account: form.bank_account,
+        wp_number: form.wp_number,
+        fin_no: form.fin_no,
+        sunday_ot_multiplier: sundayMultiplier
+      })
     }
     setLoading(false)
     if (result?.error) { setError(result.error); return }
@@ -138,19 +164,19 @@ const WorkersTab = memo(function WorkersTab({ workers, role, onCreateWorker, onU
       <div style={{ background: '#fff', border: '1px solid #e4e9f0', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
         <div style={{ overflowX: 'auto' }}>
           {/* Desktop table */}
-          <div className="workers-desktop-table" style={{ minWidth: 700 }}>
+          <div className="workers-desktop-table" style={{ minWidth: 780 }}>
             <div style={{
-              display: 'grid', gridTemplateColumns: isAdmin ? '1.5fr 1fr 0.8fr 1.2fr 0.8fr 1fr 80px' : '1.5fr 1fr 0.8fr 1.2fr 0.8fr 1fr',
+              display: 'grid', gridTemplateColumns: isAdmin ? '1.4fr 0.9fr 0.7fr 1.1fr 0.8fr 0.8fr 0.9fr 80px' : '1.4fr 0.9fr 0.7fr 1.1fr 0.8fr 0.8fr 0.9fr',
               gap: 12, padding: '10px 20px', background: '#f8fafc', borderBottom: '1px solid #e4e9f0',
             }}>
-              {['Name', 'Salary', 'Levy', 'Bank Account', 'Work Permit', 'FIN No.', ...(isAdmin ? ['Actions'] : [])].map(h => (
+              {['Name', 'Salary', 'Levy', 'Bank Account', 'Work Permit', 'FIN No.', 'Sunday OT', ...(isAdmin ? ['Actions'] : [])].map(h => (
                 <div key={h} style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.8px' }}>{h}</div>
               ))}
             </div>
 
             {workers.map((w, i) => (
               <div key={w.id} style={{
-                display: 'grid', gridTemplateColumns: isAdmin ? '1.5fr 1fr 0.8fr 1.2fr 0.8fr 1fr 80px' : '1.5fr 1fr 0.8fr 1.2fr 0.8fr 1fr',
+                display: 'grid', gridTemplateColumns: isAdmin ? '1.4fr 0.9fr 0.7fr 1.1fr 0.8fr 0.8fr 0.9fr 80px' : '1.4fr 0.9fr 0.7fr 1.1fr 0.8fr 0.8fr 0.9fr',
                 gap: 12, padding: '14px 20px',
                 borderBottom: i < workers.length - 1 ? '1px solid #f1f5f9' : 'none',
                 alignItems: 'center', transition: 'background 0.12s',
@@ -164,6 +190,16 @@ const WorkersTab = memo(function WorkersTab({ workers, role, onCreateWorker, onU
                 <div style={{ fontSize: 13, color: '#4b5563' }}>{w.bank_account || '—'}</div>
                 <div style={{ fontSize: 13, color: '#4b5563', fontFamily: 'monospace' }}>{w.wp_number || '—'}</div>
                 <div style={{ fontSize: 13, color: '#4b5563', fontFamily: 'monospace' }}>{w.fin_no || '—'}</div>
+                <div>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', padding: '3px 8px', borderRadius: 6, fontSize: 11.5, fontWeight: 600,
+                    background: Number(w.sunday_ot_multiplier ?? 1.5) >= 2.0 ? '#f5f3ff' : '#f8fafc',
+                    color: Number(w.sunday_ot_multiplier ?? 1.5) >= 2.0 ? '#7c3aed' : '#475569',
+                    border: `1px solid ${Number(w.sunday_ot_multiplier ?? 1.5) >= 2.0 ? 'rgba(124,58,237,0.25)' : '#e2e8f0'}`,
+                  }}>
+                    {Number(w.sunday_ot_multiplier ?? 1.5).toFixed(1)}×
+                  </span>
+                </div>
                 {isAdmin && (
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button onClick={() => openEdit(w)} style={{
@@ -216,6 +252,16 @@ const WorkersTab = memo(function WorkersTab({ workers, role, onCreateWorker, onU
                   <div style={{ fontSize: 13, color: '#4b5563', fontFamily: 'monospace' }}>
                     <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 2, fontFamily: 'inherit' }}>FIN No.</span>
                     {w.fin_no || '—'}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#4b5563' }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Sunday OT</span>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', padding: '2px 6px', borderRadius: 4, fontSize: 11.5, fontWeight: 600,
+                      background: Number(w.sunday_ot_multiplier ?? 1.5) >= 2.0 ? '#f5f3ff' : '#f8fafc',
+                      color: Number(w.sunday_ot_multiplier ?? 1.5) >= 2.0 ? '#7c3aed' : '#475569',
+                    }}>
+                      {Number(w.sunday_ot_multiplier ?? 1.5).toFixed(1)}×
+                    </span>
                   </div>
                 </div>
                 {isAdmin && (
@@ -276,6 +322,43 @@ const WorkersTab = memo(function WorkersTab({ workers, role, onCreateWorker, onU
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>FIN No.</label>
                 <input className="form-input" value={form.fin_no} onChange={e => setForm(f => ({ ...f, fin_no: e.target.value }))} placeholder="e.g. S1234567D" />
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>Sunday OT</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <select
+                    className="form-input"
+                    value={['1.5', '2', '2.0'].includes(form.sunday_ot_multiplier) ? (Number(form.sunday_ot_multiplier) === 2 ? '2.0' : '1.5') : 'custom'}
+                    onChange={e => {
+                      if (e.target.value !== 'custom') {
+                        setForm(f => ({ ...f, sunday_ot_multiplier: e.target.value }))
+                      } else {
+                        setForm(f => ({ ...f, sunday_ot_multiplier: '2.5' }))
+                      }
+                    }}
+                    style={{ flex: 1, padding: '8px 12px', border: '1.5px solid #e4e9f0', borderRadius: 8, fontSize: 13 }}
+                  >
+                    <option value="1.5">Normal OT (1.5×)</option>
+                    <option value="2.0">Sunday OT (2.0×)</option>
+                    <option value="custom">Custom multiplier</option>
+                  </select>
+                  {!['1.5', '2', '2.0'].includes(form.sunday_ot_multiplier) && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <input
+                        className="form-input"
+                        type="number"
+                        step="0.1"
+                        min="1"
+                        max="5"
+                        style={{ width: 75, padding: '8px 8px', border: '1.5px solid #e4e9f0', borderRadius: 8, fontSize: 13, textAlign: 'center' }}
+                        placeholder="2.0"
+                        value={form.sunday_ot_multiplier}
+                        onChange={e => setForm(f => ({ ...f, sunday_ot_multiplier: e.target.value }))}
+                      />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>×</span>
+                    </div>
+                  )}
+                </div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 18, borderTop: '1px solid #e4e9f0' }}>
                 <button type="button" onClick={() => setShowModal(false)} disabled={loading} style={{ padding: '9px 18px', background: '#fff', border: '1.5px solid #e4e9f0', borderRadius: 8, fontSize: 13.5, fontWeight: 500, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>

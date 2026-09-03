@@ -16,6 +16,7 @@ export async function createWorker(data: {
   bank_account?: string;
   fin_no?: string;
   levy?: number;
+  sunday_ot_multiplier?: number;
 }) {
   const user = await getAuthUser();
   if (user.role !== "admin") return { error: "Unauthorized" };
@@ -31,6 +32,7 @@ export async function updateWorker(
     bank_account: string;
     fin_no: string;
     levy: number;
+    sunday_ot_multiplier: number;
   }>
 ) {
   const user = await getAuthUser();

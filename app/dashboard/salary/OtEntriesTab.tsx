@@ -153,9 +153,19 @@ const OtEntriesTab = memo(function OtEntriesTab({ workers, entries, month, year,
                       flexWrap: 'wrap', gap: 8,
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 12.5, color: '#64748b', fontFamily: 'monospace', minWidth: 90 }}>
-                          {new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 140 }}>
+                          <span style={{ fontSize: 12.5, color: '#64748b', fontFamily: 'monospace' }}>
+                            {new Date(entry.entry_date + 'T00:00:00').toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                          {new Date(entry.entry_date + 'T00:00:00').getDay() === 0 && (
+                            <span style={{
+                              padding: '1px 5px', background: '#fef2f2', color: '#dc2626',
+                              border: '1px solid #fecaca', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                            }}>
+                              SUN
+                            </span>
+                          )}
+                        </div>
                         <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{Number(entry.hours).toFixed(1)} hrs</span>
                         {entry.notes && <span style={{ fontSize: 12, color: '#94a3b8' }}>— {entry.notes}</span>}
                       </div>
@@ -197,6 +207,19 @@ const OtEntriesTab = memo(function OtEntriesTab({ workers, entries, month, year,
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>Date *</label>
                   <input className="form-input" type="date" required value={bulkForm.entry_date} onChange={e => setBulkForm(f => ({ ...f, entry_date: e.target.value }))} style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #e4e9f0', borderRadius: 8, fontSize: 13.5 }} />
+                  {bulkForm.entry_date && (
+                    <div style={{ marginTop: 4, fontSize: 11.5 }}>
+                      {new Date(bulkForm.entry_date + 'T00:00:00').getDay() === 0 ? (
+                        <span style={{ color: '#dc2626', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          ☀️ Sunday — Workers' Sunday OT rate will apply
+                        </span>
+                      ) : (
+                        <span style={{ color: '#64748b' }}>
+                          Standard weekday OT (1.5× rate)
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#4b5563', marginBottom: 6 }}>Notes (optional)</label>
