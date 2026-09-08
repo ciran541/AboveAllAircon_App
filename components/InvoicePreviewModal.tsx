@@ -96,6 +96,14 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
     hideMaterialsHeading: false,
     fullyPaid: isReceipt,
     finalPaymentCollected: existingFinalPayment,
+    disclaimerText: `All aircon installation works are carried out in accordance to MOM & BCA safety rules & regulations.
+
+Aircon installation involves hacking and drilling of walls and tiles.
+Owners are responsible to protect their tiles, vinyl flooring, wall papers, limewash painting, doors and furnitures.
+Highly recommend for aircon works to be completed before installation of any surface design works.
+
+If Aircon installation cannot be proceeded on booked installation date due to unfinished existing renovation works, tiling, electrical wiring etc…
+$160 will be charged for each rescheduled trip.`,
   });
 
   // ── Textarea mirror state (arrays → editable text) ───────────────────────
@@ -137,6 +145,9 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
   const handleWarrantyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setWarrantyText(e.target.value);
     setData(prev => ({ ...prev, warranty: textToArr(e.target.value) }));
+  };
+  const handleDisclaimerChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setData(prev => ({ ...prev, disclaimerText: e.target.value }));
   };
 
   // ── Instant Sync (Local) ──
@@ -359,6 +370,18 @@ export default function InvoicePreviewModal({ job, onClose, documentType = 'invo
               <div>
                 <label style={labelStyle}>Warranty <span style={{ fontWeight: 400, color: '#94a3b8' }}>(one per line → bullet points)</span></label>
                 <textarea value={warrantyText} onChange={handleWarrantyChange} rows={4} style={inputStyle} />
+              </div>
+
+              {divider}
+              <h3 style={sectionHeadStyle}>Terms &amp; Disclaimer</h3>
+              <div style={{ marginTop: 8 }}>
+                <label style={labelStyle}>Disclaimer text <span style={{ fontWeight: 400, color: '#94a3b8' }}>(shown bottom-left of table, small font)</span></label>
+                <textarea
+                  value={data.disclaimerText || ''}
+                  onChange={handleDisclaimerChange}
+                  rows={9}
+                  style={{ ...inputStyle, fontSize: 12, lineHeight: '1.5' }}
+                />
               </div>
 
               <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>

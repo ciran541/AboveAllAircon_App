@@ -181,6 +181,16 @@ const styles = StyleSheet.create({
     borderRightWidth: 1.5,
     borderColor: BLACK,
   },
+  disclaimerSection: {
+    marginTop: 10,
+    marginBottom: 4,
+    paddingHorizontal: 2,
+  },
+  disclaimerText: {
+    fontSize: 7.5,
+    lineHeight: 1.55,
+    color: '#333333',
+  },
   totalsRightCol: {
     width: '30%',
   },
@@ -265,6 +275,7 @@ export interface InvoiceData {
   hideMaterialsHeading?: boolean;
   fullyPaid?: boolean;       // When true: shows PAID stamp + zero balance
   finalPaymentCollected?: number; // Amount collected as final balance payment
+  disclaimerText?: string;   // Terms / disclaimer shown in bottom-left of table
 }
 
 interface InvoicePDFProps {
@@ -479,6 +490,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
           </View>
         </View>
 
+
         {/* ── FOOTER ── */}
         <View style={styles.footer}>
           {data.cvRedeemed && (
@@ -505,7 +517,10 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
           ) : (
             <Text style={styles.footerBold}>UEN: 202538280D (Above All Aircon Pte Ltd)</Text>
           )}
-          <Text style={{ marginTop: 18 }}>
+          {data.disclaimerText ? (
+            <Text style={[styles.disclaimerText, { marginTop: 14, marginBottom: 6 }]}>{data.disclaimerText}</Text>
+          ) : null}
+          <Text style={{ marginTop: data.disclaimerText ? 0 : 18 }}>
             Thank you for choosing us!
           </Text>
         </View>
