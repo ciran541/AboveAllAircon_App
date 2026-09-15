@@ -103,7 +103,9 @@ Owners are responsible to protect their tiles, vinyl flooring, wall papers, lime
 Highly recommend for aircon works to be completed before installation of any surface design works.
 
 If Aircon installation cannot be proceeded on booked installation date due to unfinished existing renovation works, tiling, electrical wiring etc…
-$160 will be charged for each rescheduled trip.`,
+$160 will be charged for each rescheduled trip.
+
+Please observe if there are any water seepage for HDB installation without aircon ledge as we are unable to test for water seepage from exterior HDB holes. Above All Aircon are not liable for water seeping as it is the owner's responsibility to observe and update us if there's water coming in after rain.`,
   });
 
   // ── Textarea mirror state (arrays → editable text) ───────────────────────

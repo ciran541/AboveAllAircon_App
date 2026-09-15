@@ -180,6 +180,14 @@ const styles = StyleSheet.create({
     width: '70%',
     borderRightWidth: 1.5,
     borderColor: BLACK,
+    padding: 7,
+    justifyContent: 'space-between',
+  },
+  leftCellPaynow: {
+    fontSize: 8,
+    fontFamily: 'Times-Bold',
+    lineHeight: 1.6,
+    textAlign: 'center',
   },
   disclaimerSection: {
     marginTop: 10,
@@ -447,7 +455,21 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
 
           {/* Totals */}
           <View style={styles.totalsRow}>
-            <View style={styles.totalsLeftCell} />
+            <View style={styles.totalsLeftCell}>
+              {/* PayNow / UEN */}
+              {!data.fullyPaid && (
+                <View style={{ alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+                  <Text style={styles.leftCellPaynow}>
+                    Please make a paynow transfer to our company UEN
+                  </Text>
+                  {data.paymentCompany === 'Letswork' ? (
+                    <Text style={styles.leftCellPaynow}>UEN: 202213844N (Letswork Pte Ltd)</Text>
+                  ) : (
+                    <Text style={styles.leftCellPaynow}>UEN: 202538280D (Above All Aircon Pte Ltd)</Text>
+                  )}
+                </View>
+              )}
+            </View>
             <View style={styles.totalsRightCol}>
               <View style={styles.totalLine}>
                 <Text style={styles.totalLabelCell}>Total</Text>
@@ -507,20 +529,10 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
               Job will take place and be completed on {data.jobDateStr}
             </Text>
           ) : null}
-          {!data.fullyPaid && (
-            <Text style={styles.footerBold}>
-              Please make a paynow transfer to our company UEN
-            </Text>
-          )}
-          {data.paymentCompany === 'Letswork' ? (
-            <Text style={styles.footerBold}>UEN: 202213844N (Letswork Pte Ltd)</Text>
-          ) : (
-            <Text style={styles.footerBold}>UEN: 202538280D (Above All Aircon Pte Ltd)</Text>
-          )}
           {data.disclaimerText ? (
             <Text style={[styles.disclaimerText, { marginTop: 14, marginBottom: 6 }]}>{data.disclaimerText}</Text>
           ) : null}
-          <Text style={{ marginTop: data.disclaimerText ? 0 : 18 }}>
+          <Text style={{ marginTop: data.disclaimerText ? 4 : 18 }}>
             Thank you for choosing us!
           </Text>
         </View>
