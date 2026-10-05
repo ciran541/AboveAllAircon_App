@@ -486,7 +486,13 @@ async function _upsertWithToken(
         // A stored event id that Google no longer knows about (hard-deleted and
         // purged) would otherwise fail this PATCH identically forever, leaving
         // the job permanently off the calendar. Signal the caller to recreate.
-        if (method === "PATCH" && (response.status === 404 || response.status === 410)) {
+        // 404/410 = event hard-deleted/purged.
+        // 403 on a PATCH = the stored event ID is no longer accessible to the
+        // service account (e.g. event was deleted and the slot reused by a
+        // different owner, or the event migrated to a calendar we can't write to).
+        // All three mean "our stored event id is stale" → signal the caller to
+        // recreate rather than failing this job's sync permanently.
+        if (method === "PATCH" && (response.status === 404 || response.status === 410 || response.status === 403)) {
           throw new Error(`__EVENT_GONE__ ${response.status}`);
         }
         throw new Error(`Google Calendar upsert failed (${params.type}): ${response.status} ${errorText}`);
