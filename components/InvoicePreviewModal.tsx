@@ -106,6 +106,7 @@ If Aircon installation cannot be proceeded on booked installation date due to un
 $160 will be charged for each rescheduled trip.
 
 Please observe if there are any water seepage for HDB installation without aircon ledge as we are unable to test for water seepage from exterior HDB holes. Above All Aircon are not liable for water seeping as it is the owner's responsibility to observe and update us if there's water coming in after rain.`,
+    depositTermsText: `A deposit is required to secure the aircon package at the quoted price. This price is valid for 30 days from an official payment details (quotation / invoice) issued date. Any changes, upgrades, or revisions made after 30 days will be subject to the latest rates and a revised deposit amount.`,
   });
 
   // ── Textarea mirror state (arrays → editable text) ───────────────────────
@@ -150,6 +151,9 @@ Please observe if there are any water seepage for HDB installation without airco
   };
   const handleDisclaimerChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setData(prev => ({ ...prev, disclaimerText: e.target.value }));
+  };
+  const handleDepositTermsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setData(prev => ({ ...prev, depositTermsText: e.target.value }));
   };
 
   // ── Instant Sync (Local) ──
@@ -375,13 +379,24 @@ Please observe if there are any water seepage for HDB installation without airco
               </div>
 
               {divider}
-              <h3 style={sectionHeadStyle}>Terms &amp; Disclaimer</h3>
+              <h3 style={sectionHeadStyle}>Terms &amp; Conditions</h3>
+
               <div style={{ marginTop: 8 }}>
-                <label style={labelStyle}>Disclaimer text <span style={{ fontWeight: 400, color: '#94a3b8' }}>(shown bottom-left of table, small font)</span></label>
+                <label style={{ ...labelStyle, color: '#1d4ed8' }}>📋 Deposit &amp; Validity <span style={{ fontWeight: 400, color: '#94a3b8' }}>(left column)</span></label>
+                <textarea
+                  value={data.depositTermsText || ''}
+                  onChange={handleDepositTermsChange}
+                  rows={5}
+                  style={{ ...inputStyle, fontSize: 12, lineHeight: '1.5' }}
+                />
+              </div>
+
+              <div style={{ marginTop: 10 }}>
+                <label style={{ ...labelStyle, color: '#0369a1' }}>🔧 Installation Notice <span style={{ fontWeight: 400, color: '#94a3b8' }}>(right column)</span></label>
                 <textarea
                   value={data.disclaimerText || ''}
                   onChange={handleDisclaimerChange}
-                  rows={9}
+                  rows={10}
                   style={{ ...inputStyle, fontSize: 12, lineHeight: '1.5' }}
                 />
               </div>

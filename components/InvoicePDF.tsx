@@ -199,6 +199,39 @@ const styles = StyleSheet.create({
     lineHeight: 1.55,
     color: '#333333',
   },
+  /* ── Terms & Conditions block ── */
+  termsBlock: {
+    marginTop: 10,
+  },
+  termsHeader: {
+    backgroundColor: BLUE,
+    borderWidth: 1,
+    borderColor: BLACK,
+    paddingVertical: 3,
+    paddingHorizontal: 5,
+  },
+  termsRow: {
+    flexDirection: 'row',
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: BLACK,
+  },
+  termsColLeft: {
+    width: '50%',
+    borderRightWidth: 1,
+    borderColor: BLACK,
+    padding: 7,
+  },
+  termsColRight: {
+    width: '50%',
+    padding: 7,
+  },
+  termsHeading: {
+    fontFamily: 'Times-Bold',
+    fontSize: 7.5,
+    marginBottom: 4,
+  },
   totalsRightCol: {
     width: '30%',
   },
@@ -284,6 +317,7 @@ export interface InvoiceData {
   fullyPaid?: boolean;       // When true: shows PAID stamp + zero balance
   finalPaymentCollected?: number; // Amount collected as final balance payment
   disclaimerText?: string;   // Terms / disclaimer shown in bottom-left of table
+  depositTermsText?: string; // Deposit & validity terms (left column of T&C block)
 }
 
 interface InvoicePDFProps {
@@ -512,6 +546,30 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
           </View>
         </View>
 
+        {/* ── TERMS & CONDITIONS ── */}
+        {(data.disclaimerText || data.depositTermsText) && (
+          <View style={styles.termsBlock}>
+            <View style={styles.termsHeader}>
+              <Text style={styles.sectionBoxText}>Terms &amp; Conditions</Text>
+            </View>
+            <View style={styles.termsRow}>
+              {/* Left col: Deposit & Validity */}
+              <View style={styles.termsColLeft}>
+                <Text style={styles.termsHeading}>DEPOSIT &amp; VALIDITY</Text>
+                {data.depositTermsText ? (
+                  <Text style={styles.disclaimerText}>{data.depositTermsText}</Text>
+                ) : null}
+              </View>
+              {/* Right col: Installation Notice */}
+              <View style={styles.termsColRight}>
+                <Text style={styles.termsHeading}>INSTALLATION NOTICE</Text>
+                {data.disclaimerText ? (
+                  <Text style={styles.disclaimerText}>{data.disclaimerText}</Text>
+                ) : null}
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* ── FOOTER ── */}
         <View style={styles.footer}>
@@ -529,10 +587,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
               Job will take place and be completed on {data.jobDateStr}
             </Text>
           ) : null}
-          {data.disclaimerText ? (
-            <Text style={[styles.disclaimerText, { marginTop: 14, marginBottom: 6 }]}>{data.disclaimerText}</Text>
-          ) : null}
-          <Text style={{ marginTop: data.disclaimerText ? 4 : 18 }}>
+          <Text style={{ marginTop: 18 }}>
             Thank you for choosing us!
           </Text>
         </View>
