@@ -634,67 +634,66 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
         </View>
 
         {/* ── TERMS & CONDITIONS ── */}
-        {(data.disclaimerText || data.depositTermsText) && (
-          <View style={styles.termsBlock}>
-            <View style={styles.termsHeader}>
-              <Text style={styles.sectionBoxText}>Terms &amp; Conditions</Text>
+        {(() => {
+          const showBalanceInLeft = !data.isQuotation && !data.fullyPaid && !data.depositTermsText && !!data.balancePaymentTermsText;
+          const hasContent = data.disclaimerText || data.depositTermsText || showBalanceInLeft;
+          if (!hasContent) return null;
+          return (
+            <View style={styles.termsBlock}>
+              <View style={styles.termsHeader}>
+                <Text style={styles.sectionBoxText}>Terms &amp; Conditions</Text>
+              </View>
+              <View style={styles.termsRow}>
+                {/* Left col: Deposit & Validity  OR  Balance Payment Terms */}
+                <View style={styles.termsColLeft}>
+                  {showBalanceInLeft ? (
+                    <>
+                      <Text style={styles.termsHeading}>BALANCE PAYMENT TERMS</Text>
+                      <Text style={[styles.disclaimerText, { marginBottom: 4 }]}>
+                        In the event the Client fails to remit payment within seven (7) calendar days of the invoice date, Above All Aircon Pte Ltd reserves the right to exercise any or all of the following remedies:
+                      </Text>
+                      <View style={styles.balanceTermsBulletRow}>
+                        <View style={styles.balanceTermsBulletDot} />
+                        <Text style={styles.balanceTermsBulletText}>
+                          <Text style={styles.balanceTermsBulletTitle}>Suspension of Services: </Text>
+                          Above All Aircon may immediately pause all active project workflows, production, and deliveries without liability for any resulting delays. Services will resume only upon receipt of the outstanding balance in cleared funds.
+                        </Text>
+                      </View>
+                      <View style={styles.balanceTermsBulletRow}>
+                        <View style={styles.balanceTermsBulletDot} />
+                        <Text style={styles.balanceTermsBulletText}>
+                          <Text style={styles.balanceTermsBulletTitle}>Late Payment Interest: </Text>
+                          Overdue balances will accrue interest at a rate of 1.5% per month (or the maximum rate permitted by law), calculated daily from the original due date until fully paid.
+                        </Text>
+                      </View>
+                      <View style={styles.balanceTermsBulletRow}>
+                        <View style={styles.balanceTermsBulletDot} />
+                        <Text style={styles.balanceTermsBulletText}>
+                          <Text style={styles.balanceTermsBulletTitle}>Collection Costs: </Text>
+                          The Client agrees to indemnify Above All Aircon for all reasonable costs incurred in recovering overdue amounts, including legal fees and third-party collection agency expenses.
+                        </Text>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.termsHeading}>DEPOSIT &amp; VALIDITY</Text>
+                      {data.depositTermsText ? (
+                        <Text style={styles.disclaimerText}>{data.depositTermsText}</Text>
+                      ) : null}
+                    </>
+                  )}
+                </View>
+                {/* Right col: Installation Notice */}
+                <View style={styles.termsColRight}>
+                  <Text style={styles.termsHeading}>INSTALLATION NOTICE</Text>
+                  {data.disclaimerText ? (
+                    <Text style={styles.disclaimerText}>{data.disclaimerText}</Text>
+                  ) : null}
+                </View>
+              </View>
             </View>
-            <View style={styles.termsRow}>
-              {/* Left col: Deposit & Validity */}
-              <View style={styles.termsColLeft}>
-                <Text style={styles.termsHeading}>DEPOSIT &amp; VALIDITY</Text>
-                {data.depositTermsText ? (
-                  <Text style={styles.disclaimerText}>{data.depositTermsText}</Text>
-                ) : null}
-              </View>
-              {/* Right col: Installation Notice */}
-              <View style={styles.termsColRight}>
-                <Text style={styles.termsHeading}>INSTALLATION NOTICE</Text>
-                {data.disclaimerText ? (
-                  <Text style={styles.disclaimerText}>{data.disclaimerText}</Text>
-                ) : null}
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* ── BALANCE PAYMENT TERMS (balance invoices only) ── */}
-        {!data.isQuotation && !data.fullyPaid && data.balancePaymentTermsText && (
-          <View style={styles.balanceTermsBlock}>
-            <View style={styles.balanceTermsHeader}>
-              <Text style={styles.balanceTermsHeaderText}>Balance Payment Terms</Text>
-            </View>
-            <View style={styles.balanceTermsBody}>
-              <Text style={styles.balanceTermsIntro}>
-                In the event the Client fails to remit payment within seven (7) calendar days of the invoice date, Above All Aircon Pte Ltd reserves the right to exercise any or all of the following remedies:
-              </Text>
-              {/* Suspension of Services */}
-              <View style={styles.balanceTermsBulletRow}>
-                <View style={styles.balanceTermsBulletDot} />
-                <Text style={styles.balanceTermsBulletText}>
-                  <Text style={styles.balanceTermsBulletTitle}>Suspension of Services: </Text>
-                  Above All Aircon may immediately pause all active project workflows, production, and deliveries without liability for any resulting delays. Services will resume only upon receipt of the outstanding balance in cleared funds.
-                </Text>
-              </View>
-              {/* Late Payment Interest */}
-              <View style={styles.balanceTermsBulletRow}>
-                <View style={styles.balanceTermsBulletDot} />
-                <Text style={styles.balanceTermsBulletText}>
-                  <Text style={styles.balanceTermsBulletTitle}>Late Payment Interest: </Text>
-                  Overdue balances will accrue interest at a rate of 1.5% per month (or the maximum rate permitted by law), calculated daily from the original due date until fully paid.
-                </Text>
-              </View>
-              {/* Collection Costs */}
-              <View style={styles.balanceTermsBulletRow}>
-                <View style={styles.balanceTermsBulletDot} />
-                <Text style={styles.balanceTermsBulletText}>
-                  <Text style={styles.balanceTermsBulletTitle}>Collection Costs: </Text>
-                  The Client agrees to indemnify Above All Aircon for all reasonable costs incurred in recovering overdue amounts, including legal fees and third-party collection agency expenses.
-                </Text>
-              </View>
-            </View>
-          </View>
-        )}
+          );
+        })()}
 
         {/* ── CLIENT SIGNATURE (balance invoices only) ── */}
         {!data.isQuotation && !data.fullyPaid && (
