@@ -6,12 +6,14 @@ const BLACK = '#000000';
 
 const styles = StyleSheet.create({
   page: {
-    padding: 40,
-    paddingBottom: 50,
+    paddingTop: 36,
+    paddingBottom: 44,
+    paddingHorizontal: 22,
     fontFamily: 'Times-Roman',
     fontSize: 10.5,
     color: '#000',
   },
+
 
   /* ── Header ── */
   headerRow: {
@@ -444,7 +446,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
 
   return (
     <Document>
-      <Page size="A4" style={styles.page} wrap={false}>
+      <Page size="A4" style={styles.page}>
 
         {/* ── PAID WATERMARK (only on fully-paid receipts) ── */}
         {data.fullyPaid && (
@@ -633,108 +635,113 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
           </View>
         </View>
 
-        {/* ── TERMS & CONDITIONS ── */}
-        {(() => {
-          const showBalanceInLeft = !data.isQuotation && !data.fullyPaid && !data.depositTermsText && !!data.balancePaymentTermsText;
-          const hasContent = data.disclaimerText || data.depositTermsText || showBalanceInLeft;
-          if (!hasContent) return null;
-          return (
-            <View style={styles.termsBlock}>
-              <View style={styles.termsHeader}>
-                <Text style={styles.sectionBoxText}>Terms &amp; Conditions</Text>
-              </View>
-              <View style={styles.termsRow}>
-                {/* Left col: Deposit & Validity  OR  Balance Payment Terms */}
-                <View style={styles.termsColLeft}>
-                  {showBalanceInLeft ? (
-                    <>
-                      <Text style={styles.termsHeading}>BALANCE PAYMENT TERMS</Text>
-                      <Text style={[styles.disclaimerText, { marginBottom: 4 }]}>
-                        In the event the Client fails to remit payment within seven (7) calendar days of the invoice date, Above All Aircon Pte Ltd reserves the right to exercise any or all of the following remedies:
-                      </Text>
-                      <View style={styles.balanceTermsBulletRow}>
-                        <View style={styles.balanceTermsBulletDot} />
-                        <Text style={styles.balanceTermsBulletText}>
-                          <Text style={styles.balanceTermsBulletTitle}>Suspension of Services: </Text>
-                          Above All Aircon may immediately pause all active project workflows, production, and deliveries without liability for any resulting delays. Services will resume only upon receipt of the outstanding balance in cleared funds.
-                        </Text>
-                      </View>
-                      <View style={styles.balanceTermsBulletRow}>
-                        <View style={styles.balanceTermsBulletDot} />
-                        <Text style={styles.balanceTermsBulletText}>
-                          <Text style={styles.balanceTermsBulletTitle}>Late Payment Interest: </Text>
-                          Overdue balances will accrue interest at a rate of 1.5% per month (or the maximum rate permitted by law), calculated daily from the original due date until fully paid.
-                        </Text>
-                      </View>
-                      <View style={styles.balanceTermsBulletRow}>
-                        <View style={styles.balanceTermsBulletDot} />
-                        <Text style={styles.balanceTermsBulletText}>
-                          <Text style={styles.balanceTermsBulletTitle}>Collection Costs: </Text>
-                          The Client agrees to indemnify Above All Aircon for all reasonable costs incurred in recovering overdue amounts, including legal fees and third-party collection agency expenses.
-                        </Text>
-                      </View>
-                    </>
-                  ) : (
-                    <>
-                      <Text style={styles.termsHeading}>DEPOSIT &amp; VALIDITY</Text>
-                      {data.depositTermsText ? (
-                        <Text style={styles.disclaimerText}>{data.depositTermsText}</Text>
-                      ) : null}
-                    </>
-                  )}
-                </View>
-                {/* Right col: Installation Notice */}
-                <View style={styles.termsColRight}>
-                  <Text style={styles.termsHeading}>INSTALLATION NOTICE</Text>
-                  {data.disclaimerText ? (
-                    <Text style={styles.disclaimerText}>{data.disclaimerText}</Text>
-                  ) : null}
-                </View>
-              </View>
-            </View>
-          );
-        })()}
+        {/* ══ PAGE 2: T&C, Signature, Footer ══ */}
+        <View break>
 
-        {/* ── CLIENT SIGNATURE (balance invoices only) ── */}
-        {!data.isQuotation && !data.fullyPaid && (
-          <View style={styles.signatureBlock}>
-            <View style={styles.signatureLeft}>
-              <Text style={styles.signatureLabel}>Client Acknowledgement</Text>
-              <Text style={[styles.signatureCaption, { marginBottom: 14 }]}>
-                By signing below, I/We confirm receipt of this invoice and agree to the balance payment terms stated above.
-              </Text>
-              <View style={styles.signatureLine} />
-              <Text style={styles.signatureCaption}>Client Signature &amp; Date</Text>
-            </View>
-            <View style={styles.signatureRight}>
-              <Text style={styles.signatureLabel}>Full Name (Print)</Text>
-              <View style={[styles.signatureLine, { marginTop: 20 }]} />
-              <Text style={styles.signatureCaption}>Client Name</Text>
-              <View style={[styles.signatureLine, { marginTop: 16 }]} />
-              <Text style={styles.signatureCaption}>Date</Text>
-            </View>
-          </View>
-        )}
+          {/* ── TERMS & CONDITIONS ── */}
+          {(() => {
+            const showBalanceInLeft = !data.isQuotation && !data.fullyPaid && !data.depositTermsText && !!data.balancePaymentTermsText;
+            const hasContent = data.disclaimerText || data.depositTermsText || showBalanceInLeft;
+            if (!hasContent) return null;
+            return (
+              <View style={styles.termsBlock}>
+                <View style={styles.termsHeader}>
+                  <Text style={styles.sectionBoxText}>Terms &amp; Conditions</Text>
+                </View>
+                <View style={styles.termsRow}>
+                  {/* Left col: Deposit & Validity  OR  Balance Payment Terms */}
+                  <View style={styles.termsColLeft}>
+                    {showBalanceInLeft ? (
+                      <>
+                        <Text style={styles.termsHeading}>BALANCE PAYMENT TERMS</Text>
+                        <Text style={[styles.disclaimerText, { marginBottom: 4 }]}>
+                          In the event the Client fails to remit payment within seven (7) calendar days of the invoice date, Above All Aircon Pte Ltd reserves the right to exercise any or all of the following remedies:
+                        </Text>
+                        <View style={styles.balanceTermsBulletRow}>
+                          <View style={styles.balanceTermsBulletDot} />
+                          <Text style={styles.balanceTermsBulletText}>
+                            <Text style={styles.balanceTermsBulletTitle}>Suspension of Services: </Text>
+                            Above All Aircon may immediately pause all active project workflows, production, and deliveries without liability for any resulting delays. Services will resume only upon receipt of the outstanding balance in cleared funds.
+                          </Text>
+                        </View>
+                        <View style={styles.balanceTermsBulletRow}>
+                          <View style={styles.balanceTermsBulletDot} />
+                          <Text style={styles.balanceTermsBulletText}>
+                            <Text style={styles.balanceTermsBulletTitle}>Late Payment Interest: </Text>
+                            Overdue balances will accrue interest at a rate of 1.5% per month (or the maximum rate permitted by law), calculated daily from the original due date until fully paid.
+                          </Text>
+                        </View>
+                        <View style={styles.balanceTermsBulletRow}>
+                          <View style={styles.balanceTermsBulletDot} />
+                          <Text style={styles.balanceTermsBulletText}>
+                            <Text style={styles.balanceTermsBulletTitle}>Collection Costs: </Text>
+                            The Client agrees to indemnify Above All Aircon for all reasonable costs incurred in recovering overdue amounts, including legal fees and third-party collection agency expenses.
+                          </Text>
+                        </View>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.termsHeading}>DEPOSIT &amp; VALIDITY</Text>
+                        {data.depositTermsText ? (
+                          <Text style={styles.disclaimerText}>{data.depositTermsText}</Text>
+                        ) : null}
+                      </>
+                    )}
+                  </View>
+                  {/* Right col: Installation Notice */}
+                  <View style={styles.termsColRight}>
+                    <Text style={styles.termsHeading}>INSTALLATION NOTICE</Text>
+                    {data.disclaimerText ? (
+                      <Text style={styles.disclaimerText}>{data.disclaimerText}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              </View>
+            );
+          })()}
 
-        {/* ── FOOTER ── */}
-        <View style={styles.footer}>
-          {data.cvRedeemed && (
-            <Text style={[styles.footerBold, { marginBottom: 12, color: '#10b981' }]}>
-              CV redeemed (SG Climate Voucher)
-            </Text>
+          {/* ── CLIENT SIGNATURE (balance invoices only) ── */}
+          {!data.isQuotation && !data.fullyPaid && (
+            <View style={[styles.signatureBlock, { marginTop: 16 }]}>
+              <View style={styles.signatureLeft}>
+                <Text style={styles.signatureLabel}>Client Acknowledgement</Text>
+                <Text style={[styles.signatureCaption, { marginBottom: 14 }]}>
+                  By signing below, I/We confirm receipt of this invoice and agree to the balance payment terms stated above.
+                </Text>
+                <View style={styles.signatureLine} />
+                <Text style={styles.signatureCaption}>Client Signature &amp; Date</Text>
+              </View>
+              <View style={styles.signatureRight}>
+                <Text style={styles.signatureLabel}>Full Name (Print)</Text>
+                <View style={[styles.signatureLine, { marginTop: 20 }]} />
+                <Text style={styles.signatureCaption}>Client Name</Text>
+                <View style={[styles.signatureLine, { marginTop: 16 }]} />
+                <Text style={styles.signatureCaption}>Date</Text>
+              </View>
+            </View>
           )}
-          {data.fullyPaid ? (
-            <Text style={[styles.footerBold, { marginBottom: 12, color: '#15803d' }]}>
-              ✓ Payment fully received. Thank you!
+
+          {/* ── FOOTER ── */}
+          <View style={styles.footer}>
+            {data.cvRedeemed && (
+              <Text style={[styles.footerBold, { marginBottom: 12, color: '#10b981' }]}>
+                CV redeemed (SG Climate Voucher)
+              </Text>
+            )}
+            {data.fullyPaid ? (
+              <Text style={[styles.footerBold, { marginBottom: 12, color: '#15803d' }]}>
+                ✓ Payment fully received. Thank you!
+              </Text>
+            ) : !data.isQuotation ? (
+              <Text style={[styles.footerBold, { marginBottom: 12 }]}>
+                Job will take place and be completed on {data.jobDateStr}
+              </Text>
+            ) : null}
+            <Text style={{ marginTop: 18 }}>
+              Thank you for choosing us!
             </Text>
-          ) : !data.isQuotation ? (
-            <Text style={[styles.footerBold, { marginBottom: 12 }]}>
-              Job will take place and be completed on {data.jobDateStr}
-            </Text>
-          ) : null}
-          <Text style={{ marginTop: 18 }}>
-            Thank you for choosing us!
-          </Text>
+          </View>
+
         </View>
 
       </Page>
