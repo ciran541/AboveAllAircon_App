@@ -107,6 +107,13 @@ $160 will be charged for each rescheduled trip.
 
 Please observe if there are any water seepage for HDB installation without aircon ledge as we are unable to test for water seepage from exterior HDB holes. Above All Aircon are not liable for water seeping as it is the owner's responsibility to observe and update us if there's water coming in after rain.`,
     depositTermsText: `A deposit is required to secure the aircon package at the quoted price. This price is valid for 30 days from an official payment details (quotation / invoice) issued date. Any changes, upgrades, or revisions made after 30 days will be subject to the latest rates and a revised deposit amount.`,
+    balancePaymentTermsText: `In the event the Client fails to remit payment within seven (7) calendar days of the invoice date, Above All Aircon Pte Ltd reserves the right to exercise any or all of the following remedies:
+
+• Suspension of Services: Above All Aircon may immediately pause all active project workflows, production, and deliveries without liability for any resulting delays. Services will resume only upon receipt of the outstanding balance in cleared funds.
+
+• Late Payment Interest: Overdue balances will accrue interest at a rate of 1.5% per month (or the maximum rate permitted by law), calculated daily from the original due date until fully paid.
+
+• Collection Costs: The Client agrees to indemnify Above All Aircon for all reasonable costs incurred in recovering overdue amounts, including legal fees and third-party collection agency expenses.`,
   });
 
   // ── Textarea mirror state (arrays → editable text) ───────────────────────
@@ -154,6 +161,9 @@ Please observe if there are any water seepage for HDB installation without airco
   };
   const handleDepositTermsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setData(prev => ({ ...prev, depositTermsText: e.target.value }));
+  };
+  const handleBalancePaymentTermsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setData(prev => ({ ...prev, balancePaymentTermsText: e.target.value }));
   };
 
   // ── Instant Sync (Local) ──
@@ -400,6 +410,18 @@ Please observe if there are any water seepage for HDB installation without airco
                   style={{ ...inputStyle, fontSize: 12, lineHeight: '1.5' }}
                 />
               </div>
+
+              {!isQuotation && !isReceipt && (
+                <div style={{ marginTop: 10, background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: 10 }}>
+                  <label style={{ ...labelStyle, color: '#b45309' }}>⚠️ Balance Payment Terms <span style={{ fontWeight: 400, color: '#94a3b8' }}>(shown on invoice only)</span></label>
+                  <textarea
+                    value={data.balancePaymentTermsText || ''}
+                    onChange={handleBalancePaymentTermsChange}
+                    rows={8}
+                    style={{ ...inputStyle, fontSize: 12, lineHeight: '1.5' }}
+                  />
+                </div>
+              )}
 
               <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input type="checkbox" id="cvRedeemed" name="cvRedeemed" checked={data.cvRedeemed} onChange={handleChange} style={{ width: 16, height: 16, cursor: 'pointer' }} />

@@ -232,6 +232,92 @@ const styles = StyleSheet.create({
     fontSize: 7.5,
     marginBottom: 4,
   },
+
+  /* ── Balance Payment Terms block ── */
+  balanceTermsBlock: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: BLACK,
+  },
+  balanceTermsHeader: {
+    backgroundColor: '#fde68a',
+    borderBottomWidth: 1,
+    borderBottomColor: BLACK,
+    paddingVertical: 3,
+    paddingHorizontal: 5,
+  },
+  balanceTermsHeaderText: {
+    fontFamily: 'Times-Bold',
+    fontSize: 10.5,
+  },
+  balanceTermsBody: {
+    padding: 7,
+  },
+  balanceTermsIntro: {
+    fontSize: 7.5,
+    lineHeight: 1.55,
+    color: '#333333',
+    marginBottom: 5,
+  },
+  balanceTermsBulletRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+    paddingLeft: 4,
+    alignItems: 'flex-start',
+  },
+  balanceTermsBulletDot: {
+    width: 3.5,
+    height: 3.5,
+    borderRadius: 1.75,
+    backgroundColor: '#000000',
+    marginTop: 4.5,
+    marginRight: 6,
+    flexShrink: 0,
+  },
+  balanceTermsBulletText: {
+    flex: 1,
+    fontSize: 7.5,
+    lineHeight: 1.55,
+    color: '#333333',
+  },
+  balanceTermsBulletTitle: {
+    fontFamily: 'Times-Bold',
+    fontSize: 7.5,
+    color: '#000000',
+  },
+
+  /* ── Signature block ── */
+  signatureBlock: {
+    marginTop: 10,
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: BLACK,
+  },
+  signatureLeft: {
+    width: '55%',
+    borderRightWidth: 1,
+    borderRightColor: BLACK,
+    padding: 8,
+  },
+  signatureRight: {
+    width: '45%',
+    padding: 8,
+  },
+  signatureLabel: {
+    fontFamily: 'Times-Bold',
+    fontSize: 8,
+    marginBottom: 18,
+    color: '#333333',
+  },
+  signatureLine: {
+    borderBottomWidth: 1,
+    borderBottomColor: BLACK,
+    marginBottom: 4,
+  },
+  signatureCaption: {
+    fontSize: 7,
+    color: '#555555',
+  },
   totalsRightCol: {
     width: '30%',
   },
@@ -318,6 +404,7 @@ export interface InvoiceData {
   finalPaymentCollected?: number; // Amount collected as final balance payment
   disclaimerText?: string;   // Terms / disclaimer shown in bottom-left of table
   depositTermsText?: string; // Deposit & validity terms (left column of T&C block)
+  balancePaymentTermsText?: string; // Late-payment remedies (balance invoices only)
 }
 
 interface InvoicePDFProps {
@@ -567,6 +654,65 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                   <Text style={styles.disclaimerText}>{data.disclaimerText}</Text>
                 ) : null}
               </View>
+            </View>
+          </View>
+        )}
+
+        {/* ── BALANCE PAYMENT TERMS (balance invoices only) ── */}
+        {!data.isQuotation && !data.fullyPaid && data.balancePaymentTermsText && (
+          <View style={styles.balanceTermsBlock}>
+            <View style={styles.balanceTermsHeader}>
+              <Text style={styles.balanceTermsHeaderText}>Balance Payment Terms</Text>
+            </View>
+            <View style={styles.balanceTermsBody}>
+              <Text style={styles.balanceTermsIntro}>
+                In the event the Client fails to remit payment within seven (7) calendar days of the invoice date, Above All Aircon Pte Ltd reserves the right to exercise any or all of the following remedies:
+              </Text>
+              {/* Suspension of Services */}
+              <View style={styles.balanceTermsBulletRow}>
+                <View style={styles.balanceTermsBulletDot} />
+                <Text style={styles.balanceTermsBulletText}>
+                  <Text style={styles.balanceTermsBulletTitle}>Suspension of Services: </Text>
+                  Above All Aircon may immediately pause all active project workflows, production, and deliveries without liability for any resulting delays. Services will resume only upon receipt of the outstanding balance in cleared funds.
+                </Text>
+              </View>
+              {/* Late Payment Interest */}
+              <View style={styles.balanceTermsBulletRow}>
+                <View style={styles.balanceTermsBulletDot} />
+                <Text style={styles.balanceTermsBulletText}>
+                  <Text style={styles.balanceTermsBulletTitle}>Late Payment Interest: </Text>
+                  Overdue balances will accrue interest at a rate of 1.5% per month (or the maximum rate permitted by law), calculated daily from the original due date until fully paid.
+                </Text>
+              </View>
+              {/* Collection Costs */}
+              <View style={styles.balanceTermsBulletRow}>
+                <View style={styles.balanceTermsBulletDot} />
+                <Text style={styles.balanceTermsBulletText}>
+                  <Text style={styles.balanceTermsBulletTitle}>Collection Costs: </Text>
+                  The Client agrees to indemnify Above All Aircon for all reasonable costs incurred in recovering overdue amounts, including legal fees and third-party collection agency expenses.
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* ── CLIENT SIGNATURE (balance invoices only) ── */}
+        {!data.isQuotation && !data.fullyPaid && (
+          <View style={styles.signatureBlock}>
+            <View style={styles.signatureLeft}>
+              <Text style={styles.signatureLabel}>Client Acknowledgement</Text>
+              <Text style={[styles.signatureCaption, { marginBottom: 14 }]}>
+                By signing below, I/We confirm receipt of this invoice and agree to the balance payment terms stated above.
+              </Text>
+              <View style={styles.signatureLine} />
+              <Text style={styles.signatureCaption}>Client Signature &amp; Date</Text>
+            </View>
+            <View style={styles.signatureRight}>
+              <Text style={styles.signatureLabel}>Full Name (Print)</Text>
+              <View style={[styles.signatureLine, { marginTop: 20 }]} />
+              <Text style={styles.signatureCaption}>Client Name</Text>
+              <View style={[styles.signatureLine, { marginTop: 16 }]} />
+              <Text style={styles.signatureCaption}>Date</Text>
             </View>
           </View>
         )}
