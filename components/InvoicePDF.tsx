@@ -6,11 +6,11 @@ const BLACK = '#000000';
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 36,
-    paddingBottom: 44,
+    paddingTop: 24,
+    paddingBottom: 24,
     paddingHorizontal: 22,
     fontFamily: 'Times-Roman',
-    fontSize: 10.5,
+    fontSize: 10,
     color: '#000',
   },
 
@@ -20,7 +20,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 18,
+    marginBottom: 10,
   },
   logo: {
     width: 105,
@@ -37,8 +37,8 @@ const styles = StyleSheet.create({
   },
   invoiceTitle: {
     fontFamily: 'Times-Bold',
-    fontSize: 28,
-    marginBottom: 10,
+    fontSize: 24,
+    marginBottom: 6,
   },
   detailRow: {
     flexDirection: 'row',
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   // Body row
   tableBody: {
     position: 'relative',
-    minHeight: 220,
+    minHeight: 80,
   },
   tableBodyBorders: {
     position: 'absolute',
@@ -197,13 +197,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   disclaimerText: {
-    fontSize: 7.5,
-    lineHeight: 1.55,
+    fontSize: 6.5,
+    lineHeight: 1.45,
     color: '#333333',
   },
   /* ── Terms & Conditions block ── */
   termsBlock: {
-    marginTop: 10,
+    marginTop: 6,
   },
   termsHeader: {
     backgroundColor: BLUE,
@@ -223,11 +223,11 @@ const styles = StyleSheet.create({
     width: '50%',
     borderRightWidth: 1,
     borderColor: BLACK,
-    padding: 7,
+    padding: 5,
   },
   termsColRight: {
     width: '50%',
-    padding: 7,
+    padding: 5,
   },
   termsHeading: {
     fontFamily: 'Times-Bold',
@@ -278,19 +278,19 @@ const styles = StyleSheet.create({
   },
   balanceTermsBulletText: {
     flex: 1,
-    fontSize: 7.5,
-    lineHeight: 1.55,
+    fontSize: 6.5,
+    lineHeight: 1.45,
     color: '#333333',
   },
   balanceTermsBulletTitle: {
     fontFamily: 'Times-Bold',
-    fontSize: 7.5,
+    fontSize: 6.5,
     color: '#000000',
   },
 
   /* ── Signature block ── */
   signatureBlock: {
-    marginTop: 10,
+    marginTop: 6,
     flexDirection: 'row',
     borderWidth: 1,
     borderColor: BLACK,
@@ -299,16 +299,16 @@ const styles = StyleSheet.create({
     width: '55%',
     borderRightWidth: 1,
     borderRightColor: BLACK,
-    padding: 8,
+    padding: 5,
   },
   signatureRight: {
     width: '45%',
-    padding: 8,
+    padding: 5,
   },
   signatureLabel: {
     fontFamily: 'Times-Bold',
     fontSize: 8,
-    marginBottom: 18,
+    marginBottom: 8,
     color: '#333333',
   },
   signatureLine: {
@@ -370,8 +370,8 @@ const styles = StyleSheet.create({
 
   /* ── Footer ── */
   footer: {
-    marginTop: 14,
-    fontSize: 10.5,
+    marginTop: 8,
+    fontSize: 10,
     lineHeight: 1.5,
   },
   footerBold: {
@@ -446,7 +446,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
 
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
+      <Page size="A4" style={styles.page} wrap={false}>
 
         {/* ── PAID WATERMARK (only on fully-paid receipts) ── */}
         {data.fullyPaid && (
@@ -635,12 +635,57 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
           </View>
         </View>
 
-        {/* ══ PAGE 2: T&C, Signature, Footer ══ (no break for receipts) */}
-        <View break={!data.fullyPaid}>
+        {/* ── T&C inline (quotations & receipts only — no second page) ── */}
+        {(data.isQuotation || data.fullyPaid) && (data.disclaimerText || data.depositTermsText) && (
+          <View style={[styles.termsBlock, { marginTop: 10 }]}>
+            <View style={styles.termsHeader}>
+              <Text style={styles.sectionBoxText}>Terms &amp; Conditions</Text>
+            </View>
+            <View style={styles.termsRow}>
+              <View style={styles.termsColLeft}>
+                <Text style={styles.termsHeading}>DEPOSIT &amp; VALIDITY</Text>
+                {data.depositTermsText ? (
+                  <Text style={styles.disclaimerText}>{data.depositTermsText}</Text>
+                ) : null}
+              </View>
+              <View style={styles.termsColRight}>
+                <Text style={styles.termsHeading}>INSTALLATION NOTICE</Text>
+                {data.disclaimerText ? (
+                  <Text style={styles.disclaimerText}>{data.disclaimerText}</Text>
+                ) : null}
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* ── Footer for quotations & receipts ── */}
+        {(data.isQuotation || data.fullyPaid) && (
+          <View style={styles.footer}>
+            {data.cvRedeemed && (
+              <Text style={[styles.footerBold, { marginBottom: 12, color: '#10b981' }]}>
+                CV redeemed (SG Climate Voucher)
+              </Text>
+            )}
+            {data.fullyPaid ? (
+              <Text style={[styles.footerBold, { marginBottom: 12, color: '#15803d' }]}>
+                ✓ Payment fully received. Thank you!
+              </Text>
+            ) : null}
+            <Text style={{ marginTop: 18 }}>
+              Thank you for choosing us!
+            </Text>
+          </View>
+        )}
+
+      </Page>
+
+      {/* ══ PAGE 2: T&C + Signature + Footer (balance invoices only) ══ */}
+      {!data.isQuotation && !data.fullyPaid && (
+        <Page size="A4" style={styles.page}>
 
           {/* ── TERMS & CONDITIONS ── */}
           {(() => {
-            const showBalanceInLeft = !data.isQuotation && !data.fullyPaid && !data.depositTermsText && !!data.balancePaymentTermsText;
+            const showBalanceInLeft = !data.depositTermsText && !!data.balancePaymentTermsText;
             const hasContent = data.disclaimerText || data.depositTermsText || showBalanceInLeft;
             if (!hasContent) return null;
             return (
@@ -649,7 +694,7 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                   <Text style={styles.sectionBoxText}>Terms &amp; Conditions</Text>
                 </View>
                 <View style={styles.termsRow}>
-                  {/* Left col: Deposit & Validity  OR  Balance Payment Terms */}
+                  {/* Left col: Balance Payment Terms OR Deposit & Validity */}
                   <View style={styles.termsColLeft}>
                     {showBalanceInLeft ? (
                       <>
@@ -700,26 +745,24 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
             );
           })()}
 
-          {/* ── CLIENT SIGNATURE (balance invoices only) ── */}
-          {!data.isQuotation && !data.fullyPaid && (
-            <View style={[styles.signatureBlock, { marginTop: 16 }]}>
-              <View style={styles.signatureLeft}>
-                <Text style={styles.signatureLabel}>Client Acknowledgement</Text>
-                <Text style={[styles.signatureCaption, { marginBottom: 14 }]}>
-                  By signing below, I/We confirm receipt of this invoice and agree to the balance payment terms stated above.
-                </Text>
-                <View style={styles.signatureLine} />
-                <Text style={styles.signatureCaption}>Client Signature &amp; Date</Text>
-              </View>
-              <View style={styles.signatureRight}>
-                <Text style={styles.signatureLabel}>Full Name (Print)</Text>
-                <View style={[styles.signatureLine, { marginTop: 20 }]} />
-                <Text style={styles.signatureCaption}>Client Name</Text>
-                <View style={[styles.signatureLine, { marginTop: 16 }]} />
-                <Text style={styles.signatureCaption}>Date</Text>
-              </View>
+          {/* ── CLIENT SIGNATURE ── */}
+          <View style={[styles.signatureBlock, { marginTop: 16 }]}>
+            <View style={styles.signatureLeft}>
+              <Text style={styles.signatureLabel}>Client Acknowledgement</Text>
+              <Text style={[styles.signatureCaption, { marginBottom: 14 }]}>
+                By signing below, I/We confirm receipt of this invoice and agree to the balance payment terms stated above.
+              </Text>
+              <View style={styles.signatureLine} />
+              <Text style={styles.signatureCaption}>Client Signature &amp; Date</Text>
             </View>
-          )}
+            <View style={styles.signatureRight}>
+              <Text style={styles.signatureLabel}>Full Name (Print)</Text>
+              <View style={[styles.signatureLine, { marginTop: 20 }]} />
+              <Text style={styles.signatureCaption}>Client Name</Text>
+              <View style={[styles.signatureLine, { marginTop: 16 }]} />
+              <Text style={styles.signatureCaption}>Date</Text>
+            </View>
+          </View>
 
           {/* ── FOOTER ── */}
           <View style={styles.footer}>
@@ -728,23 +771,17 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
                 CV redeemed (SG Climate Voucher)
               </Text>
             )}
-            {data.fullyPaid ? (
-              <Text style={[styles.footerBold, { marginBottom: 12, color: '#15803d' }]}>
-                ✓ Payment fully received. Thank you!
-              </Text>
-            ) : !data.isQuotation ? (
-              <Text style={[styles.footerBold, { marginBottom: 12 }]}>
-                Job will take place and be completed on {data.jobDateStr}
-              </Text>
-            ) : null}
+            <Text style={[styles.footerBold, { marginBottom: 12 }]}>
+              Job will take place and be completed on {data.jobDateStr}
+            </Text>
             <Text style={{ marginTop: 18 }}>
               Thank you for choosing us!
             </Text>
           </View>
 
-        </View>
+        </Page>
+      )}
 
-      </Page>
     </Document>
   );
 };
