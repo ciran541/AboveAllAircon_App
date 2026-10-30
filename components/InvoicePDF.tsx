@@ -635,8 +635,8 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ data }) => {
           </View>
         </View>
 
-        {/* ══ PAGE 2: T&C, Signature, Footer ══ */}
-        <View break>
+        {/* ══ PAGE 2: T&C, Signature, Footer ══ (no break for receipts) */}
+        <View break={!data.fullyPaid}>
 
           {/* ── TERMS & CONDITIONS ── */}
           {(() => {
